@@ -1,16 +1,14 @@
 ---
-title: "R Notebook"
+title: "Data set creation"
 output: html_notebook
 ---
 
-This notebook serves simply to merge the many exports from the satellites into one shapefile. 
+Last update: 19.08.2023
+Author: Peter Kamal (peter.kamal@t-online.de)
 
-What happened before this notebook:
+This notebook serves to create an analysis-ready data set for the economic part of the thesis. It imports the raw satellite data exported in 'econ_3_satellite_raw_export.js' and the weather data webscraped with 'econ_4_webscraper.py', merges, cleans and exports it. The final data set is available on figshare (accessible through the paper).
 
-* I generated an image collection detailing yearly forest cover and forest cover loss for the entirety of BC in the Google Earth Engine JavaScript API. The code can be found here: https://code.earthengine.google.com/93f016fd737e545055f7178f0d5f9c43?noload=true 
-* I used that image collection and the shapefiles created in the Notebook shapefile_creation.RMD.nb and ran another piece of code in the GEE API to extract change data per Land Use Zone type as a GEOJSON file. This notebook here imports these GEOJSON files one by one. This code can be found here: https://code.earthengine.google.com/eb6e3737c360c0013053373f0c7d2821?noload=true .
-
-
+First, import the raw data.
 
 ```{r}
 library(tidyverse)
@@ -60,20 +58,9 @@ new_multipolygons <- polygons_from_geometry_collections %>%
 coast_final <- bind_rows(valid_part,new_multipolygons)
 ```
 
+To illustrate the data, I will make two figures: One that displays the different land use zones, one that illustrates the data by showing relative forest cover at the beginning of the data (Figure 1 and 2 in the text respectively).
 
-Now, let's look at the data quickly:
-
-```{r}
-ggplot() +
-  geom_sf(data = coast_final, aes(fill = as.numeric(cover2021))) +
-  scale_fill_viridis_c(name = "Forest cover (ha) in 2021") +
-  labs(x = "Longitude", y = "Latitude")
-
-#ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/treecover2000.png", height = 8, width = 8)
-```
-
-That's it. That's the one. It's gorgeous. I'm going to make one more map to illustrate land use zones.
-
+Land use zones:
 
 ```{r}
 ggplot() +
@@ -88,7 +75,7 @@ ggplot() +
 #ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/land_use_zones.png", height = 8, width = 8)
 ```
 
-And one more to illustrate the data. What I'd like is weighted forest cover (per area). This also provides a really good sanity check on the quality of the data.
+Data illustration:
 
 ```{r}
 coast_final %>% 
@@ -103,9 +90,7 @@ coast_final %>%
 ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/forest_cover.png", height = 8, width = 8)
 ```
 
-
-
-Now, I just have to form an analysis ready data set. I exclude the IDs that showed faultiness, i.e. more forest cover than area.
+The following chunks exclude faulty cells (where there is more forest cover than area) and then forms an almost-ready data set.
 
 ```{r}
 faulty_ids <- coast_final %>% 
@@ -130,13 +115,8 @@ almost_ard <- coast_final %>%
   filter(!id %in% faulty_ids) 
 ```
 
-There is one last thing I want to add, which is cell-year specific winter temperatures. This determines how many pine beetles survive, and hopefully controls for their effect. The coldest months in coastal BC are December and January. The interesting variable is to have the coldness of the winter the year before, so a data point for 2019 would have to be December 2018/January 2019. It's very likely sensible that I try different variables. I webscraped monthly climate data from here: https://climate.weather.gc.ca/prods_servs/cdn_climate_summary_e.html, and I have the following variables at hand:
+The next code chunk adds cell-year specific winter temperatures. It imports the webscraped data sets and extracts the lowest monthly minimum temperature (°C) for December and January for each year:
 
-* Mean Temperature (°C)
-* Mean Temperature difference from Normal (1981-2010) (°C)
-* Lowest Monthly Minimum Temperature (°C)
-
-Let's get those into shape:
 
 ```{r message=FALSE, warning=FALSE}
 temp <- read_csv("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/climate/en_climate_summaries_BC_12-2000.csv") %>% 
@@ -150,7 +130,7 @@ for(i in 2001:2021){
     
     import <- read_csv(paste0("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/climate/en_climate_summaries_BC_",
                               j,"-",i,".csv")) %>% 
-      select(Long,Lat,Clim_ID,Tm,D,Tn) %>% 
+      select(Long,Lat,Clim_ID,Tn) %>% 
       mutate(year = i) %>% 
       mutate(month = j)
     
@@ -167,19 +147,16 @@ unique_clim_ids <- temp %>%
 mintemp <- temp %>% 
   left_join(unique_clim_ids, by = "Clim_ID") %>% 
   select(-Long,-Lat) %>% 
-  rename(station = Clim_ID, meantemp = Tm, meandiff = D, mintemp = Tn) %>% 
+  rename(station = Clim_ID, mintemp = Tn) %>% 
   mutate(year = case_when(month == "12" ~ year + 1, TRUE ~ year)) %>% 
-  summarize(mintemp = mean(mintemp, na.rm = T), 
-            #meandiff = mean(meandiff,na.rm = T), 
-            #meantemp = mean(meantemp, na.rm = T),
+  summarize(mintemp = mean(mintemp, na.rm = T),
             .by = c(station,year,longitude,latitude)) %>% 
   pivot_wider(names_from = year, values_from = mintemp, names_prefix = "mintemp_") %>% 
   filter_at(vars(starts_with("mintemp_")), any_vars(! is.na(.))) %>% 
   st_as_sf(.,coords = c("longitude","latitude"))
 ```
 
-Now, we're going to find the three nearest neighbors (three nearest weather stations) for each polygon, and average over those. That's gonna give us hopefully the least possible holes in the data with good spatial proximity.
-
+This code chunk finds the three nearest neighbors (three nearest weather stations) for each polygon, and averages over those.
 
 ```{r}
 library(nngeo)
@@ -213,8 +190,7 @@ append %>% filter_at(vars(starts_with("mintemp_")), any_vars(! is.na(.)))
 
 ```
 
-Okay, we're good to go here (no cell has no weather data at all).
-
+This was successful: no cell has no weather data at all.
 
 ```{r message=FALSE, warning=FALSE}
 ard <- append %>%  
@@ -229,9 +205,7 @@ ard <- append %>%
 
 ```
 
-
-
-This data set is now ready to be processed. I haven't excluded cells with previous cover 0, so I have the potential to map all cells in the future. I have to do that before I run anything. Here is the export:
+This data set is now ready to be processed.  Here is the export:
 
 ```{r}
 st_write(ard,"C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/ard_luz_clim_full.shp")
