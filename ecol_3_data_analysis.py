@@ -1,7 +1,10 @@
 # DATA ANALYSIS SCRIPT FOR WOLF-DEER-MODEL IN LOGGED FOREST
+
 # Author: Peter Kamal
 # Python version: 3.9.13
 # Last update: 21/07/23
+
+# Note: This takes the full data sets generated from 'ecol_2_data_transformation.py' and produces the graphs for the paper.
 
 #------------------------------------------------------------------------------
 
@@ -304,10 +307,19 @@ def graph_extinction_timing(n_simulations, version, parameter):
 
 # EXECUTE
 
-#graph_deer_only(n_simulations = 100, version = 1, parameter = 8)
+# Figure 10:
 #graph_predator_prey(n_simulations = 1000, version = 1, post_eq_time = 4000)
-graph_logging_intensity(n_simulations = 1000, parameters_unprotected = list(range(0,14)), parameters_protected = list(range(1,13)) , version = 1, post_eq_time = 4000)
-#graph_extinction_timing(n_simulations = 1000, version = 1, parameter = 7)
+
+# Figure 11:
+#graph_deer_only(n_simulations = 100, version = 1, parameter = 8)
+
+# Figure 12:
+#graph_logging_intensity(n_simulations = 1000, parameters_unprotected = list(range(0,14)), parameters_protected = list(range(1,13)) , version = 1, post_eq_time = 4000)
+
+# Figure 13:
 #graph_protection(n_simulations = 1000, version = 1, parameter = 7, post_eq_time = 4000)
+
+# Figure 14:
+#graph_extinction_timing(n_simulations = 1000, version = 1, parameter = 7)
 
 
