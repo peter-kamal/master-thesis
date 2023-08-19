@@ -1,0 +1,156 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This notebook exists to create the shapefile that contains the observational units for DiD estimation. I include maps to make clear what is happening. First, we have to import all the data. Data comes from:
+
+* Grid: https://catalogue.data.gov.bc.ca/dataset/bcgs-1-20-000-grid 
+* Districts: https://catalogue.data.gov.bc.ca/dataset/regional-districts-legally-defined-administrative-areas-of-bc 
+* GBR: https://catalogue.data.gov.bc.ca/dataset/fadm-special-protection-area 
+* Land Use Zones: https://ebmdata.ca/download/GBR_Protected.gdb.zip 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(sf)
+
+grid <- st_read("20K_GRID_polygon_gcs.shp")
+districts <- st_read("ABMS_RD_polygon.shp")
+gbr <- st_read("FADM_SPA_polygon.shp") %>% filter(DSGNTD_AR == "Great Bear Rainforest")
+parks <- st_read("ParksER_GBR-polygon.shp")
+conservancies <- st_read("Cons_GBR_HG-polygon.shp")
+bmtas <- st_read("BMTA_GBR-polygon.shp")
+sfmas <- st_read("SFMA_GBR-polygon.shp")
+
+#vector of all coastal districts
+coast_districts <- c("RDAC","CAPRD","CCRD","CMXRD","CVRD","FVRD","RDKS","MVRD",
+                     "RDMW","RDN","NCRD","qRD","SLRD","STRD","SCRD")
+```
+
+
+In a first step, we will cut down the districts and the grid to just the coast to make computation easier.
+
+```{r message=FALSE, warning=FALSE}
+districts <- districts %>% filter(ABRVN %in% coast_districts)
+
+grid <- st_transform(grid,st_crs(districts))
+
+coast <- st_intersection(grid, districts)
+
+coast <- coast %>% 
+  select(OBJECTID, ABRVN,geometry)
+
+ggplot() +
+  geom_sf(data = coast, aes(fill = ABRVN)) +
+  scale_fill_viridis_d(option = "mako")
+
+```
+
+Next, we will construct a single shapefile that contains all sorts of protected areas within the GBR, and classify non-protected areas as well. To do so, we have to unify the shape of the data first.
+
+```{r message=FALSE, warning=FALSE}
+bmtas <- bmtas %>% 
+  select(BMTA_NAME,geometry) %>% 
+  rename(Zone = BMTA_NAME) %>% 
+  mutate(Type = "BMTA", .after = Zone)
+
+conservancies <- conservancies %>% 
+  select(CONSERVANC, geometry) %>% 
+  rename(Zone = CONSERVANC) %>% 
+  mutate(Type = "Conservancy", .after = Zone)
+
+gbr <- gbr %>% 
+  select(DSGNTD_AR, geometry) %>% 
+  rename(Zone = DSGNTD_AR) %>% 
+  mutate(Type = "GBR", .after = Zone)
+
+parks <- parks %>% 
+  select(PROTECTED_, PROTECTE_2, geometry) %>% 
+  rename(Zone = PROTECTED_,
+         Type = PROTECTE_2)
+
+sfmas <- sfmas %>% 
+  select(PROTECTE_1,PROTECTE_2, geometry) %>% 
+  rename(Zone = PROTECTE_1,
+         Type = PROTECTE_2)
+
+
+all_protected <- dplyr::bind_rows(bmtas, conservancies,parks,sfmas)
+
+all_protected_outline <- st_union(all_protected)
+
+gbr_non_protected <- st_difference(gbr,all_protected_outline)
+
+gbr_non_protected <- gbr_non_protected %>% 
+  mutate(Type = "GBR - Not designated")
+
+gbr_plus <- dplyr::bind_rows(all_protected,gbr_non_protected)
+
+gbr_plus_outline <- st_union(gbr_plus)
+
+ggplot() +
+  geom_sf(data = gbr_plus, aes(fill = Type)) +
+  scale_fill_viridis_d(option = "cividis")
+```
+
+Now, we have to match that to the coastal grid.
+
+
+```{r message=FALSE, warning=FALSE}
+coast_gbr <- st_intersection(coast,gbr_plus)
+coast_non_gbr <- st_difference(coast, gbr_plus_outline)
+
+coast_gbr <- coast_gbr[st_is(coast_gbr, c("POLYGON", "MULTIPOLYGON")),]
+
+coast_non_gbr <- coast_non_gbr %>% 
+  mutate(Zone = "Coast - Non Protected",Type = "Control", .after = ABRVN)
+
+coast_full <- dplyr::bind_rows(coast_gbr,coast_non_gbr)
+
+ggplot()+
+  geom_sf(data = coast_full, aes(fill = Type)) +
+  scale_fill_viridis_d(option = "cividis")
+```
+
+
+Perfect. I'll clean the data up a little, and then I will save it, disaggregated by land use zone. This is necessary due to memory restrictions in the GEE API.
+
+```{r}
+coast_full <- coast_full %>% 
+  cbind(1:4037) %>% 
+  rename(ID = X1.4037, Region = ABRVN) %>% 
+  select(-OBJECTID) %>% 
+  relocate(ID, .before = Region) %>% 
+  mutate(Type = case_when(Type == "ECOLOGICAL RESERVE" ~ "Ecological Reserve",
+                          Type == "PROVINCIAL PARK" ~ "Provincial Park",
+                          TRUE ~ Type)) 
+
+
+# This would be the full shapefile set
+#st_write(coast_full, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/coast_land_use_zones.shp")
+
+for(i in unique(coast_full$Type)){
+  data <- coast_full %>%  filter(Type == i)
+  st_write(data, paste0("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/",i, ".shp"))
+}
+
+
+# Split the Control part in two to not exceed the memory:
+
+control_part_one <- coast_full %>% 
+  filter(Type == "Control") %>% 
+  slice(1:974)
+
+st_write(control_part_one, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/control_part_one.shp")
+
+control_part_two <- coast_full %>% 
+  filter(Type == "Control") %>% 
+  slice(975:1874)
+
+st_write(control_part_two, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/control_part_two.shp")
+
+```
+
+
+From here, these are individually ingested in the GEE JavaScript API, and exported as GEOJSONs using the script 'satellite-raw-export.js'.
+
