@@ -113,7 +113,7 @@ ggplot()+
 ```
 
 
-Perfect. I'll clean the data up a little, and then I will save it, disaggregated by land use zone. This is necessary due to memory restrictions in the GEE API.
+Lastly, clean the data up and save it, disaggregated by land use zone. This is necessary due to memory restrictions in the GEE API.
 
 ```{r}
 coast_full <- coast_full %>% 
