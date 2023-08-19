@@ -1,7 +1,11 @@
-# DATA CONVERSION FILE WOLF-DEER-MODEL IN LOGGED FOREST
+# DATA CONVERSION FILE FOR WOLF-DEER-MODEL IN LOGGED FOREST
+
 # Author: Peter Kamal
 # Python version: 3.9.13
 # Last update: 21/07/23
+
+# Note: The main model script exports one excel file per simulation. 
+# This script merges the files together depending on the scenario and output.
 
 #------------------------------------------------------------------------------
 
