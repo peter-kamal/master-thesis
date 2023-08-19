@@ -2,9 +2,9 @@
 // Last update: 19.08.2023
 // Author: Peter Kamal (peter.kamal@t-online.de)
 
-// This script imports the image collection created in satellite-calculations.js as "interim".
+// This script imports the image collection created in "econ_1_satellite_calculations.js" as "interim".
 // Also, it imports a given shapefile as "grid". I run this code for each of the eight shapefiles
-// created in the R Notebook "shapefile_creation". This is to not exceed the memory limit.
+// created in the R Notebook "econ_2_shapefile_creation.Rmd". This is to not exceed the memory limit.
 // When exporting, make sure the file exports as a GEOJSON to be able to import in R.
 
 // IMPORTS FROM OWN ASSETS (change accordingly)
