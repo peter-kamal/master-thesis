@@ -1,0 +1,817 @@
+---
+title: "Main Analysis"
+output: html_notebook
+---
+
+This notebook is the main analysis code for the thesis. It takes the analysis-ready data generated in the file "merge_clean" and runs Difference-in-Differences and Event Study estimators on it.
+
+## Setup
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+set.seed(42)
+
+options(scipen=999)
+
+library(tidyverse)
+library(xtable)
+library(fixest)
+library(lubridate)
+library(sf)
+library(spdep)
+
+dataDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/"
+graphDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/"
+
+data <- st_read(paste0(dataDir,"ard_luz_clim_full.shp"))
+
+IHS <- function(x){log(x+(x^2+1)^(1/2))}
+```
+
+## Initial Data Wrangling
+
+This creates an first version of the final data set:
+
+```{r}
+estim_data_full <- data %>% 
+  mutate(area_ha = as.numeric(st_area(.))/10000) %>%
+  data.frame() %>% 
+  select(-geometry) %>% 
+  filter(!is.na(mintemp)) %>% 
+  pivot_wider(names_from = year, values_from = c(prevcover,loss,mintemp)) %>% 
+  filter(prevcover_2001 != 0) %>% 
+  pivot_longer(starts_with(c("prevcover","loss","mintemp")), names_to = c("variable","year"), 
+               names_sep = "_", values_to = "value") %>% 
+  pivot_wider(names_from = variable, values_from = value) %>% 
+  relocate(year,prevcover,loss,mintemp, .after = id) %>% 
+  filter(!is.na(prevcover)) %>% 
+  filter(!is.na(loss))
+
+```
+
+
+
+## Descriptive Stats
+
+Here is a table that gives some insights into the estimation data.
+
+```{r eval=FALSE, include=FALSE}
+
+stats <- rbind(
+  
+  # number of cells (total)
+  estim_data_full %>% select(id,type) %>% distinct() %>% count(type) %>% arrange(type)%>%pull(n),
+  
+  #number of different sites (total) 
+  estim_data_full %>% select(zone,type) %>% distinct() %>% count(type) %>% arrange(type) %>% pull(n),
+  
+  # total area (ha)
+  estim_data_full %>% select(id,type,area_ha) %>% distinct() %>% 
+    summarize(area_ha = sum(area_ha, na.rm = T), .by = type) %>% arrange(type) %>% pull(area_ha),
+  
+  # mean area(ha) per cell
+  estim_data_full %>% select(id,type,area_ha) %>% distinct() %>% 
+    summarize(area_ha = mean(area_ha, na.rm = T), .by = type) %>% arrange(type) %>% pull(area_ha),
+  
+  # mean forest cover % in 2001
+  estim_data_full %>% filter(year == 2001) %>% select(id,type,prevcover,area_ha) %>% 
+    summarize(weighted_cover = mean(prevcover*100/area_ha, na.rm = T), .by = type) %>% 
+    arrange(type)%>% pull(weighted_cover),
+  
+  # mean forest cover % in 2021
+  estim_data_full %>% filter(year == 2021) %>% select(id,type,prevcover,area_ha) %>% 
+    summarize(weighted_cover = mean(prevcover*100/area_ha, na.rm = T), .by = type) %>% 
+    arrange(type)%>% pull(weighted_cover),
+  
+  # mean loss (% of forest area)
+  estim_data_full %>% select(id,type,loss,prevcover) %>% 
+    summarize(weighted_loss = mean(loss*100/prevcover, na.rm = T), .by = type) %>% arrange(type) %>%
+    pull(weighted_loss),
+  
+  # mean mintemp (°C)
+  estim_data_full %>% select(id, type, mintemp) %>% 
+    summarize(mintemp = mean(mintemp, na.rm = T), .by = type) %>% arrange(type) %>% pull(mintemp)
+
+)
+  
+
+land_use_zones <- c("BMTA", "Conservancy", "Other coastal BC", "Ecological Reserve", 
+                    "Other GBR", "Provincial Park", "SFMA")
+
+statnames <- c("Number of cells", "Number of sites", "Total area (ha)", "Mean area (ha)", 
+               "Mean forest cover (% of area) in 2001",
+               "Mean forest cover (% of area) in 2021",
+               "Mean loss (% of forest cover)",
+               "Mean yearly minimum temperature (°C)")
+
+rownames(stats) <- statnames
+colnames(stats) <- land_use_zones
+
+#xtable(stats)
+
+```
+
+## Aggregated Time Series/Parallel Trends
+
+What I want to show here is the yearly time series of forest loss (as a percentage of forest cover) aggregated on a land-use-type level. This identifies both possible developments over time and support parallel trends.
+
+
+```{r}
+control_vector <- estim_data_full %>%
+  mutate(weighted_loss = loss*100/prevcover) %>%
+  summarize(weighted_loss = mean(weighted_loss, na.rm = T), .by = c(year,type, gbr)) %>% 
+  filter(type == "Control") %>% 
+  pull(weighted_loss)
+
+
+estim_data_full %>%  
+  filter(type != "Control") %>%
+  mutate(year = as.Date(as.character(year), format = "%Y")) %>%
+  mutate(weighted_loss = loss*100/prevcover) %>%
+  summarize(Treatment = mean(weighted_loss, na.rm = T), .by = c(year,type)) %>% 
+  mutate(Control = rep(control_vector,6)) %>%
+  pivot_longer(3:4, names_to = "Treatment", values_to = "weighted_loss")%>% 
+  ggplot() +
+    geom_line(aes(x = year, y = weighted_loss, color = Treatment)) +
+    geom_vline(aes(xintercept = as.Date("2006", format = "%Y")), linetype = "dashed") +
+    geom_vline(aes(xintercept = as.Date("2017", format = "%Y")), linetype = "dashed") +
+    facet_wrap(~type, scales = "free_y", ncol = 3) +
+    labs(x = "Year", y = "Forest loss (% of forest cover)") +
+    scale_color_manual(name = "", values = c("orange", "dodgerblue3")) +
+    theme_bw()
+
+ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/parallel_trends_full.png", width = 8, height = 4)
+```
+
+That graph tells me a few things that are really interesting:
+
+* All designated areas have lower percentages of forest loss than the non-designated areas, on average. This might be due to previous exploitation.
+* The non-designated areas behave very similarly to the control, which is a good argument for them to use as placebo units.
+* Parallel trends don't look too bad, but I'll have to pull up bigger or filtered graphs for each single one.
+* You can really see stuff happening that might be confounding the logging, exemplified by the spikes in the Provincial Park panel. I will explore that now.
+
+```{r}
+estim_data_full %>% 
+  filter(type == "Provincial Park") %>% 
+  filter(year %in% c(2004,2009,2019)) %>% 
+  arrange(desc(loss))
+```
+
+
+So, the spikes come from Tweedsmuir Park in particular. A google investigation revealed that Tweedsmuir Park has a mild climate and is therefore especially susceptible to the Pine Beetle and its infestations. Those spikes clearly carry over to other areas, as they are visible in the other plots (and in the Control) as well. Therefore, we need to somehow control for that confounder. The solution is the following: Beetles need mild winters for their populations to survive. The coldness of the previous winter should therefore be a good predictor of their strength and likelihood to infest in the coming year. Therefore, I have the minimum temperature in the previous winter (averaged between minimum in December and January for a bit of breadth) spatially matched to each cell. Let's plot that:
+
+```{r}
+estim_data_full %>% 
+  mutate(year = as.Date(as.character(year), format = "%Y")) %>%
+  summarize(mintemp = mean(mintemp,na.rm = T), .by = c(year,type)) %>% 
+  ggplot() +
+    geom_line(aes(x = year, y = mintemp, color = type)) +
+    scale_color_viridis_d(name = "Land Use Zone", option = "cividis", direction = -1) +
+    labs(x = "Year", y= "Minimum temperature (°C) in preceding winter") +
+    theme_bw()
+
+ggsave("graphics/temp_check.png", width = 8, height = 4)
+```
+
+Bingo! They spike around the same years. That's a good control then.
+
+
+## Estimation
+
+Ecological Reserves and Parks are stable all throughout (with the beetle exceptions). That means that they are not worth investigating. According to UBC Wiki, most of the conservancies and BMTAs got established between 2006 and 2009, in the aftermath of the Great Bear Rainforest Agreement in 2006. On the other hand, the SFMAs got established in 2017 with the Great Bear Rainforest (Forest Management) Act. Let's run through global and decomposed analyses.
+
+
+### Global estimations
+
+
+First, I'll designate the entirety of the GBR as treatment, and the rest of the coast as control. I'll run an event study with the cutoff in 2006, and one with the cutoff in 2017 to check for parallel trends. In the 2006 version, the data runs until 2016 (before the GBRFMA), in the 2017 version, the data starts in 2010 (after the last big amendment to the agreements.
+
+
+In doing so, I'm creating data sets with leads and lags centered around the cutoffs that I can reuse down below.
+
+```{r}
+estim_data_all_2006 <- estim_data_full %>% 
+  filter(!type %in% c("Ecological Reserve", "Provincial Park")) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  filter(year < 2017) %>% 
+  mutate(post_2006 = ifelse(year >= 2006,1,0)) %>% 
+  mutate(timetil_2006 = year - 2006) %>% 
+  mutate(lead1 = case_when(timetil_2006 == -1 ~ 1, TRUE ~ 0),
+    lead2 = case_when(timetil_2006 == -2 ~ 1, TRUE ~ 0),
+    lead3 = case_when(timetil_2006 == -3 ~ 1, TRUE ~ 0),
+    lead4 = case_when(timetil_2006 == -4 ~ 1, TRUE ~ 0),
+    lead5 = case_when(timetil_2006 == -5 ~ 1, TRUE ~ 0),
+    lag0 = case_when(timetil_2006 == 0 ~ 1, TRUE ~ 0),
+    lag1 = case_when(timetil_2006 == 1 ~ 1, TRUE ~ 0),
+    lag2 = case_when(timetil_2006 == 2 ~ 1, TRUE ~ 0),
+    lag3 = case_when(timetil_2006 == 3 ~ 1, TRUE ~ 0),
+    lag4 = case_when(timetil_2006 == 4 ~ 1, TRUE ~ 0),
+    lag5 = case_when(timetil_2006 == 5 ~ 1, TRUE ~ 0),
+    lag6 = case_when(timetil_2006 == 6 ~ 1, TRUE ~ 0),
+    lag7 = case_when(timetil_2006 == 7 ~ 1, TRUE ~ 0),
+    lag8 = case_when(timetil_2006 == 8 ~ 1, TRUE ~ 0),
+    lag9 = case_when(timetil_2006 == 9 ~ 1, TRUE ~ 0),
+    lag10 = case_when(timetil_2006 == 10 ~ 1, TRUE ~ 0))
+
+
+event_all_2006 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lag0 + lag1 + lag2 + lag3 + lag4 + 
+                                           lag5 + lag6 + lag7 + lag8 + lag9 + lag10) + mintemp | 
+                          id + year + region, 
+                          data = estim_data_all_2006, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover, 
+                          cluster = ~region)
+
+
+
+years_2006 <- 2001:2016
+coefficient_lead_names_2006 <- c("gbr:lead5","gbr:lead4", "gbr:lead3","gbr:lead2")
+
+coefficient_lag_names_2006 <- c("gbr:lag0", "gbr:lag1","gbr:lag2","gbr:lag3","gbr:lag4","gbr:lag5","gbr:lag6",
+                                "gbr:lag7","gbr:lag8","gbr:lag9","gbr:lag10")
+
+
+data.frame(cbind(years_2006,
+                 c(summary(event_all_2006)$coefficients[coefficient_lead_names_2006],0,
+                       summary(event_all_2006)$coefficients[coefficient_lag_names_2006]), 
+                 c(summary(event_all_2006)$se[coefficient_lead_names_2006],0,
+                       summary(event_all_2006)$se[coefficient_lag_names_2006]))) %>% 
+  rename(Year = years_2006, Coefficient = V2, STE = V3) %>% 
+  mutate(Upper = Coefficient + qnorm(0.975)*STE, Lower = Coefficient - qnorm(0.975)*STE) %>% 
+  mutate(Year = as.Date(paste0(as.character(Year),"-01-01"), format = "%Y-%m-%d")) %>% 
+  ggplot(aes(x = Year, y = Coefficient)) +
+    geom_point(color = "darkslateblue") +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "darkslateblue") +
+    geom_hline(aes(yintercept = 0)) +
+    geom_vline(aes(xintercept = as.Date("2005-11-01", format = "%Y-%m-%d")), linetype = "dashed")
+
+
+```
+
+This renders a global DiD analysis with the cutoff in 2006 invalid, as parallel trends are violated. Let's check for 2017.
+
+
+```{r}
+estim_data_all_2017 <- estim_data_full %>% 
+  filter(!type %in% c("Ecological Reserve", "Provincial Park")) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  mutate(post_2017 = ifelse(year >= 2017,1,0)) %>% 
+  filter(year > 2009) %>% 
+  mutate(timetil_2017 = year - 2017) %>% 
+  mutate(lead1 = case_when(timetil_2017 == -1 ~ 1, TRUE ~ 0),
+    lead2 = case_when(timetil_2017 == -2 ~ 1, TRUE ~ 0),
+    lead3 = case_when(timetil_2017 == -3 ~ 1, TRUE ~ 0),
+    lead4 = case_when(timetil_2017 == -4 ~ 1, TRUE ~ 0),
+    lead5 = case_when(timetil_2017 == -5 ~ 1, TRUE ~ 0),
+    lead6 = case_when(timetil_2017 == -6 ~ 1, TRUE ~ 0),
+    lead7 = case_when(timetil_2017 == -7 ~ 1, TRUE ~ 0),
+    lag0 = case_when(timetil_2017 == 0 ~ 1, TRUE ~ 0),
+    lag1 = case_when(timetil_2017 == 1 ~ 1, TRUE ~ 0),
+    lag2 = case_when(timetil_2017 == 2 ~ 1, TRUE ~ 0),
+    lag3 = case_when(timetil_2017 == 3 ~ 1, TRUE ~ 0),
+    lag4 = case_when(timetil_2017 == 4 ~ 1, TRUE ~ 0))
+
+
+event_all_2017 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lead6 + lead7 + lag0 + lag1 + 
+                                           lag2 + lag3 + lag4) + mintemp | id + year + region, 
+                      data = estim_data_all_2017, 
+                      panel.id = ~id+year,
+                      weights = ~prevcover, 
+                      cluster = ~region)
+
+years_2017 <- 2010:2021
+
+coefficient_lead_names_2017 <- c("gbr:lead7", "gbr:lead6", "gbr:lead5","gbr:lead4", "gbr:lead3","gbr:lead2")
+
+coefficient_lag_names_2017 <- c("gbr:lag0", "gbr:lag1","gbr:lag2","gbr:lag3","gbr:lag4")
+
+data.frame(cbind(years_2017,
+                 c(summary(event_all_2017)$coefficients[coefficient_lead_names_2017],0,
+                       summary(event_all_2017)$coefficients[coefficient_lag_names_2017]), 
+                 c(summary(event_all_2017)$se[coefficient_lead_names_2017],0,
+                       summary(event_all_2017)$se[coefficient_lag_names_2017]))) %>% 
+  rename(Year = years_2017, Coefficient = V2, STE = V3) %>% 
+  mutate(Upper = Coefficient + qnorm(0.975)*STE, Lower = Coefficient - qnorm(0.975)*STE) %>% 
+  mutate(Year = as.Date(paste0(as.character(Year),"-01-01"), format = "%Y-%m-%d")) %>% 
+  ggplot(aes(x = Year, y = Coefficient)) +
+    geom_point(color = "orange2") +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "orange2") +
+    geom_hline(aes(yintercept = 0)) +
+    geom_vline(aes(xintercept = as.Date("2016-11-01", format = "%Y-%m-%d")), linetype = "dashed") +
+    theme_bw()
+
+
+ggsave("graphics/event_2017_all.png", height = 4, width = 8)
+```
+
+Okay, that validates parallel trends, but also makes an effect in the DiD seem unlikely. Here is the DiD:
+
+```{r message=FALSE, warning=FALSE}
+did_all_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region, 
+                      data = estim_data_all_2017, 
+                      panel.id = ~id+year,
+                      weights = ~prevcover, 
+                      cluster = ~region)
+
+summary(did_all_2017)
+```
+
+
+That was to be expected.
+
+### Decomposition into different areas.
+
+
+Undesignated areas - Event Study 2006
+
+```{r message=FALSE, warning=FALSE}
+estim_data_non_2006 <- estim_data_all_2006 %>% filter(type %in% c("Control", "GBR - Not designated"))
+
+event_non_2006 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lag0 + lag1 + lag2 + lag3 + lag4 + 
+                                           lag5 + lag6 + lag7 + lag8 + lag9 + lag10) + mintemp | 
+                          id + year + region, 
+                          data = estim_data_non_2006, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover, 
+                          cluster = ~region)
+
+
+data.frame(cbind(years_2006,
+                 c(summary(event_non_2006)$coefficients[coefficient_lead_names_2006],0,
+                       summary(event_non_2006)$coefficients[coefficient_lag_names_2006]), 
+                 c(summary(event_non_2006)$se[coefficient_lead_names_2006],0,
+                       summary(event_non_2006)$se[coefficient_lag_names_2006]))) %>% 
+  rename(Year = years_2006, Coefficient = V2, STE = V3) %>% 
+  mutate(Upper = Coefficient + qnorm(0.975)*STE, Lower = Coefficient - qnorm(0.975)*STE) %>% 
+  mutate(Year = as.Date(paste0(as.character(Year),"-01-01"), format = "%Y-%m-%d")) %>% 
+  ggplot(aes(x = Year, y = Coefficient)) +
+    geom_point(color = "darkslateblue") +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "darkslateblue") +
+    geom_hline(aes(yintercept = 0)) +
+    geom_vline(aes(xintercept = as.Date("2005-11-01", format = "%Y-%m-%d")), linetype = "dashed")
+
+```
+
+Same as before. No parallel trends. Let's look at 2017.
+
+```{r}
+estim_data_non_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "GBR - Not designated"))
+
+
+event_non_2017 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lead6 + lead7 + lag0 + lag1 + 
+                                           lag2 + lag3 + lag4) + mintemp | id + year + region, 
+                      data = estim_data_non_2017, 
+                      panel.id = ~id+year,
+                      weights = ~prevcover, 
+                      cluster = ~region)
+
+
+data.frame(cbind(years_2017,
+                 c(summary(event_non_2017)$coefficients[coefficient_lead_names_2017],0,
+                       summary(event_non_2017)$coefficients[coefficient_lag_names_2017]), 
+                 c(summary(event_non_2017)$se[coefficient_lead_names_2017],0,
+                       summary(event_non_2017)$se[coefficient_lag_names_2017]))) %>% 
+  rename(Year = years_2017, Coefficient = V2, STE = V3) %>% 
+  mutate(Upper = Coefficient + qnorm(0.975)*STE, Lower = Coefficient - qnorm(0.975)*STE) %>% 
+  mutate(Year = as.Date(paste0(as.character(Year),"-01-01"), format = "%Y-%m-%d")) %>% 
+  ggplot(aes(x = Year, y = Coefficient)) +
+    geom_point(color = "orange2") +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "orange2") +
+    geom_hline(aes(yintercept = 0)) +
+    geom_vline(aes(xintercept = as.Date("2016-11-01", format = "%Y-%m-%d")), linetype = "dashed") +
+    theme_bw()
+
+
+ggsave("graphics/event_2017_non.png", height = 4, width = 8)
+```
+
+Yeah, same exact story as before. Let's check the DiD in 2017 for sanity:
+
+
+```{r message=FALSE, warning=FALSE}
+did_non_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region, 
+                      data = estim_data_non_2017, 
+                      panel.id = ~id+year,
+                      weights = ~prevcover, 
+                      cluster = ~region)
+
+summary(did_non_2017)
+```
+
+Nothing at all. Here are the conservancies in 2006:
+
+
+```{r message=FALSE, warning=FALSE}
+estim_data_cons_2006 <- estim_data_all_2006 %>% filter(type %in% c("Control", "Conservancy"))
+
+event_cons_2006 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lag0 + lag1 + lag2 + lag3 + lag4 + 
+                                           lag5 + lag6 + lag7 + lag8 + lag9 + lag10) + mintemp | 
+                          id + year + region, 
+                          data = estim_data_cons_2006, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover, 
+                          cluster = ~region)
+
+
+data.frame(cbind(years_2006,
+                 c(summary(event_cons_2006)$coefficients[coefficient_lead_names_2006],0,
+                       summary(event_cons_2006)$coefficients[coefficient_lag_names_2006]), 
+                 c(summary(event_cons_2006)$se[coefficient_lead_names_2006],0,
+                       summary(event_cons_2006)$se[coefficient_lag_names_2006]))) %>% 
+  rename(Year = years_2006, Coefficient = V2, STE = V3) %>% 
+  mutate(Upper = Coefficient + qnorm(0.975)*STE, Lower = Coefficient - qnorm(0.975)*STE) %>% 
+  mutate(Year = as.Date(paste0(as.character(Year),"-01-01"), format = "%Y-%m-%d")) %>% 
+  ggplot(aes(x = Year, y = Coefficient)) +
+    geom_point(color = "darkslateblue") +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "darkslateblue") +
+    geom_hline(aes(yintercept = 0)) +
+    geom_vline(aes(xintercept = as.Date("2005-11-01", format = "%Y-%m-%d")), linetype = "dashed")
+
+```
+
+Okay, again I can't say anything about 2006 because of a lack of parallel trends. Here are the conservancies in 2017:
+
+
+```{r}
+estim_data_cons_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "Conservancy"))
+
+
+event_cons_2017 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lead6 + lead7 + lag0 + lag1 + 
+                                           lag2 + lag3 + lag4) + mintemp | id + year + region, 
+                      data = estim_data_cons_2017, 
+                      panel.id = ~id+year,
+                      weights = ~prevcover, 
+                      cluster = ~region)
+
+
+data.frame(cbind(years_2017,
+                 c(summary(event_cons_2017)$coefficients[coefficient_lead_names_2017],0,
+                       summary(event_cons_2017)$coefficients[coefficient_lag_names_2017]), 
+                 c(summary(event_cons_2017)$se[coefficient_lead_names_2017],0,
+                       summary(event_cons_2017)$se[coefficient_lag_names_2017]))) %>% 
+  rename(Year = years_2017, Coefficient = V2, STE = V3) %>% 
+  mutate(Upper = Coefficient + qnorm(0.975)*STE, Lower = Coefficient - qnorm(0.975)*STE) %>% 
+  mutate(Year = as.Date(paste0(as.character(Year),"-01-01"), format = "%Y-%m-%d")) %>% 
+  ggplot(aes(x = Year, y = Coefficient)) +
+    geom_point(color = "darkslateblue") +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "darkslateblue") +
+    geom_hline(aes(yintercept = 0)) +
+    geom_vline(aes(xintercept = as.Date("2016-11-01", format = "%Y-%m-%d")), linetype = "dashed")
+
+```
+
+Seems like absolutely nothing. Let's look at the DiD.
+
+```{r message=FALSE, warning=FALSE}
+did_cons_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region, 
+                      data = estim_data_cons_2017, 
+                      panel.id = ~id+year,
+                      weights = ~prevcover, 
+                      cluster = ~region)
+
+summary(did_cons_2017)
+```
+
+Yup. Okay. So far, we've been able to cluster the standard errors because our treatment group was big enough (n > 600). Now, we're getting into fishy territory with BMTAs and SFMAs. Therefore, we need to run a Fisher permutation test for anything we do with those. For the Fisher permutation test, I randomly sample 71 subsets of 23 cells (each subset covers about the mean area of the BMTAs/SFMAs) + one subset of the remaining 18 cells and run placebo regressions on them against the rest of the controls. Here are the placebo samples:
+
+```{r message=FALSE, warning=FALSE}
+sample_size <- 23
+
+placebo_ids <- estim_data_all_2006 %>% 
+  filter(gbr == 0) %>% select(id) %>% distinct() %>% pull(id)
+
+placebo_samples <- data.frame(matrix(nrow = sample_size))
+
+i <- 1
+
+while(length(placebo_ids) >= sample_size){
+  
+  sample <- sample(placebo_ids, size= sample_size, replace =F)
+  
+  placebo_samples[,i] <- sample
+  
+  placebo_ids <- placebo_ids[!placebo_ids %in% sample]
+  
+  i <- i +1
+
+}
+
+placebo_samples <- cbind(placebo_samples, append(placebo_ids, rep(NA,sample_size-length(placebo_ids))))
+
+```
+
+
+
+This is the event study for 2006:
+
+```{r message=FALSE, warning=FALSE}
+placebo_event_2006 <- data.frame(matrix(ncol = length(years_2006), nrow = ncol(placebo_samples)))
+colnames(placebo_event_2006) <- years_2006
+
+placebo_lead_names_2006 <- c("placebo:lead5","placebo:lead4", "placebo:lead3","placebo:lead2")
+
+placebo_lag_names_2006 <- c("placebo:lag0","placebo:lag1","placebo:lag2","placebo:lag3","placebo:lag4",
+                            "placebo:lag5","placebo:lag6","placebo:lag7","placebo:lag8","placebo:lag9","placebo:lag10")
+
+
+
+
+for(i in 1:ncol(placebo_samples)){
+  
+  ids <- placebo_samples[,i]
+  
+  estim_data <- estim_data_all_2006 %>% filter(gbr == 0) %>% mutate(placebo = ifelse(id %in% ids, 1,0)) 
+  
+  event_placebo <- feols(IHS(loss) ~ placebo*(lead2 + lead3 + lead4 + lead5 + lag0 + lag1 + lag2 + lag3 + lag4 + 
+                                           lag5 + lag6 + lag7 + lag8 + lag9 + lag10) + mintemp | 
+                          id + year + region, 
+                          data = estim_data, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover)
+  
+  placebo_event_2006[i,1:length(years_2006)] <- c(summary(event_placebo)$coefficients[placebo_lead_names_2006],
+                                                     0,
+                                                     summary(event_placebo)$coefficients[placebo_lag_names_2006])
+  
+}
+
+
+```
+
+
+And this is the one for 2017:
+
+
+```{r message=FALSE, warning=FALSE}
+placebo_event_2017 <- data.frame(matrix(ncol = length(years_2017), nrow = ncol(placebo_samples)))
+colnames(placebo_event_2017) <- years_2017
+
+placebo_lead_names_2017 <- c("placebo:lead7", "placebo:lead6", "placebo:lead5","placebo:lead4",
+                             "placebo:lead3","placebo:lead2")
+
+placebo_lag_names_2017 <- c("placebo:lag0", "placebo:lag1","placebo:lag2","placebo:lag3","placebo:lag4")
+
+
+
+for(i in 1:ncol(placebo_samples)){
+  
+  ids <- placebo_samples[,i]
+  
+  estim_data <- estim_data_all_2017 %>% filter(gbr == 0) %>% mutate(placebo = ifelse(id %in% ids, 1,0)) 
+  
+  event_placebo <- feols(IHS(loss) ~ placebo*(lead2 + lead3 + lead4 + lead5 + lead6 + lead7 + lag0 + lag1 + 
+                                           lag2 + lag3 + lag4) + mintemp | id + year + region, 
+                          data = estim_data, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover)
+  
+  placebo_event_2017[i,1:length(years_2017)] <- c(summary(event_placebo)$coefficients[placebo_lead_names_2017],
+                                                     0,
+                                                     summary(event_placebo)$coefficients[placebo_lag_names_2017])
+  
+}
+
+
+```
+
+
+Now, let's estimate the "true coefficients. First, BMTAs in 2006:
+
+
+```{r}
+bmta_event_2006 <- data.frame(years_2006)
+colnames(bmta_event_2006) <- "Year"
+
+
+estim_data_bmta_2006 <- estim_data_all_2006 %>% filter(type %in% c("Control", "BMTA"))
+  
+event_bmta_2006 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lag0 + lag1 + lag2 + lag3 + lag4 + 
+                                           lag5 + lag6 + lag7 + lag8 + lag9 + lag10) + mintemp | id + year + region, 
+                          data = estim_data_bmta_2006, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover)
+  
+bmta_event_2006 <- bmta_event_2006 %>% 
+    mutate(Estimate_BMTA = c(summary(event_bmta_2006)$coefficients[coefficient_lead_names_2006],0,
+                       summary(event_bmta_2006)$coefficients[coefficient_lag_names_2006]))
+  
+
+```
+
+
+Here is the result:
+
+
+```{r}
+
+placebo_event_2006 %>% 
+  pivot_longer(1:length(years_2006),names_to = "Year", values_to = "Estimate") %>% 
+  mutate(Year = as.numeric(Year)) %>% 
+  left_join(bmta_event_2006, by = "Year") %>% 
+  ggplot() +
+    geom_histogram(aes(x = Estimate), bins = 10, color = "lightseagreen", fill = "lightseagreen", alpha = 0.4) +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.05))) +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95))) +
+    geom_vline(aes(xintercept = Estimate_BMTA), linetype = "dashed") +
+    facet_wrap(~Year, ncol = 4) +
+    ylab("Count")
+
+
+```
+Parallel trends validated, but also no expectation of an effect in the DiD.
+
+Now, BMTAs and SFMAs in 2017. I'll do them at the same time. This code chunk saves the estimated coefficients.
+
+```{r message=FALSE, warning=FALSE}
+zones <- c("BMTA", "SFMA")
+
+bmta_sfma_event_2017 <- data.frame(years_2017)
+colnames(bmta_sfma_event_2017) <- "Year"
+
+for(i in zones){
+  
+  estim_data_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", i))
+  
+  event_2017 <- feols(IHS(loss) ~ gbr*(lead2 + lead3 + lead4 + lead5 + lead6 + lead7 + lag0 + lag1 + 
+                                           lag2 + lag3 + lag4) + mintemp | id + year + region, 
+                          data = estim_data_2017, 
+                          panel.id = ~id+year,
+                          weights = ~prevcover)
+  
+  
+  bmta_sfma_event_2017 <- bmta_sfma_event_2017 %>% 
+    mutate(!!paste0("Estimate_",i) := c(summary(event_2017)$coefficients[coefficient_lead_names_2017],0,
+                       summary(event_2017)$coefficients[coefficient_lag_names_2017]))
+  
+}
+
+```
+
+
+
+And here is the result (just for SFMAs in the current version):
+
+
+```{r}
+
+placebo_event_2017 %>% 
+  pivot_longer(1:length(years_2017),names_to = "Year", values_to = "Estimate") %>% 
+  mutate(Year = as.numeric(Year)) %>% 
+  left_join(bmta_sfma_event_2017, by = "Year") %>% 
+  ggplot() +
+    geom_histogram(aes(x = Estimate), bins = 10, color = "orange2", fill = "orange2", alpha = 0.4) +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.05)), linetype = "dashed") +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95)), linetype = "dashed") +
+    geom_vline(aes(xintercept = Estimate_SFMA)) +
+    #geom_vline(aes(xintercept = Estimate_BMTA), linetype = "dashed") +
+    facet_wrap(~Year, ncol = 4) +
+    ylab("Count") +
+    theme_bw()
+
+ggsave("graphics/event_2017_sfma.png", height = 5, width = 8)
+```
+
+So this does confirm parallel trends, but would also suggest that BMTAs and SFMAs do not behave in any way outside the ordinary.
+
+
+Now, let's mosey on to the DiDs for completion's sake. Let's do placebos in 2006 first:
+
+
+```{r message=FALSE, warning=FALSE}
+placebo_did_2006 <- data.frame(matrix(ncol = 1, nrow = ncol(placebo_samples)))
+colnames(placebo_did_2006) <- "Estimate"
+
+
+for(i in 1:ncol(placebo_samples)){
+  
+  ids <- placebo_samples[,i]
+  
+  estim_data <- estim_data_all_2006 %>% filter(gbr == 0) %>% mutate(placebo = ifelse(id %in% ids, 1,0)) 
+  
+  did_2006 <- feols(IHS(loss) ~ placebo*post_2006 + mintemp | id + year + region, 
+                              data = estim_data, panel.id = ~id+year,
+                              weights = ~prevcover)
+  
+
+  placebo_did_2006[i,1] <- summary(did_2006)$coefficients["placebo:post_2006"]
+
+}
+
+```
+
+
+Now, the placebos in 2017:
+
+
+```{r message=FALSE, warning=FALSE}
+placebo_did_2017 <- data.frame(matrix(ncol = 1, nrow = ncol(placebo_samples)))
+colnames(placebo_did_2017) <- "Estimate"
+
+
+for(i in 1:ncol(placebo_samples)){
+  
+  ids <- placebo_samples[,i]
+  
+  estim_data <- estim_data_all_2017 %>% filter(gbr == 0) %>% mutate(placebo = ifelse(id %in% ids, 1,0)) 
+  
+  did_2017 <- feols(IHS(loss) ~ placebo*post_2017 + mintemp | id + year + region, 
+                              data = estim_data, panel.id = ~id+year,
+                              weights = ~prevcover)
+  
+
+  placebo_did_2017[i,1] <- summary(did_2017)$coefficients["placebo:post_2017"]
+
+}
+
+```
+
+
+Now, let's run the DiD in 2006 for the BMTAs:
+
+
+
+```{r}
+did_bmta_2006 <- feols(IHS(loss) ~ gbr*post_2006 + mintemp | id + year + region, 
+                              data = estim_data_bmta_2006, panel.id = ~id+year,
+                              weights = ~prevcover, cluster = "region")
+
+bmta_coef_2006 <- summary(did_bmta_2006)$coefficients["gbr:post_2006"]
+
+
+summary(did_bmta_2006)
+```
+
+Not even significant with clustering. Let's look at the result of the test:
+
+```{r}
+placebo_did_2006 %>% 
+  ggplot()+
+    geom_histogram(aes(x = Estimate), bins = 10, color = "lightseagreen", fill = "lightseagreen", alpha = 0.4) +
+    geom_vline(aes(xintercept = bmta_coef_2006)) +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.05)), linetype = "dashed") +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95)), linetype = "dashed") +
+    ylab("Count")
+```
+
+As expected, nothing. Now, for 2017.
+
+
+
+Here are the DiDs:
+
+```{r message=FALSE, warning=FALSE}
+estim_data_bmta_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "BMTA"))
+
+
+did_bmta_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region, 
+                              data = estim_data_bmta_2017, panel.id = ~id+year,
+                              weights = ~prevcover, cluster = "region")
+
+bmta_coef_2017 <- summary(did_bmta_2017)$coefficients["gbr:post_2017"]
+
+summary(did_bmta_2017)
+
+estim_data_sfma_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "SFMA"))
+
+
+did_sfma_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region, 
+                              data = estim_data_sfma_2017, panel.id = ~id+year,
+                              weights = ~prevcover, cluster = "region")
+
+sfma_coef_2017 <- summary(did_sfma_2017)$coefficients["gbr:post_2017"]
+
+
+summary(did_sfma_2017)
+
+```
+
+
+So the BMTAs show no effect at all with clustering, SFMAs do when clustered (highly significant). Let's check if that holds with the placebo:
+
+```{r}
+placebo_did_2017 %>% 
+  ggplot()+
+    geom_histogram(aes(x = Estimate), bins = 10, color = "lightseagreen", fill = "lightseagreen", alpha = 0.4) +
+    geom_vline(aes(xintercept = bmta_coef_2017)) +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.05)), linetype = "dashed") +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95)), linetype = "dashed") +
+    ylab("Count")
+```
+
+And SFMAs:
+
+```{r}
+placebo_did_2017 %>% 
+  ggplot()+
+    geom_histogram(aes(x = Estimate), bins = 10, color = "orange2", fill = "orange2", alpha = 0.4) +
+    geom_vline(aes(xintercept = sfma_coef_2017)) +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.05)), linetype = "dashed") +
+    geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95)), linetype = "dashed") +
+    ylab("Count") +
+    theme_bw()
+
+ggsave("graphics/did_2017_sfma.png", height = 3, width = 5)
+```
+
+Sobering. Nothing, even with 10 percent.
+
+
