@@ -4,6 +4,8 @@
 # Python version: 3.9.13
 # Last update: 22/07/23
 
+# Note: The model includes additional tracking options, which are commented out. 
+# They slow down the model but are helpful for checking the dynamics of individual animals if necessary.
 
 #------------------------------------------------------------------------------
 
@@ -15,9 +17,6 @@ import math as mt
 import pandas as pd
 import matplotlib.pyplot as plt
 from statistics import mean
-
-np.set_printoptions(suppress=True)
-#pd.options.display.max_rows = 500
 
 #------------------------------------------------------------------------------
 
@@ -628,77 +627,26 @@ class Environment:
 
 #------------------------------------------------------------------------------
 
-# ONE SIMULATION FOR A QUICK GLANCE
+# ONE SIMULATION (for a quick glance
 
 # Simulate
 
-# start_time = time.time()
-# environment = Environment(policy_in_effect = True)
-# environment.simulation()
-# print("--- %s seconds ---" % (time.time() - start_time))
-
-
+start_time = time.time()
+environment = Environment(policy_in_effect = True)
+environment.simulation()
+print("--- %s seconds ---" % (time.time() - start_time))
 
 # Plot Population dynamics
-# plt.figure(figsize = (12,8))
-# plt.plot(environment.pop_dynam.timestep,environment.pop_dynam.n_deer)
-# plt.plot(environment.pop_dynam.timestep,environment.pop_dynam.n_wolves)
-# plt.xlabel("Days")
-# plt.ylabel("Population size")
-# plt.title("Population dynamics")
-# plt.legend(["Deer", "Wolves"])
-# plt.axvline(x = start_of_logging, color = 'black')
-# plt.axvline(x = stop_of_logging, color = 'black')
-# plt.axvline(x = stop_of_logging + end_of_seral_forest, color = 'black')
-
-
-# Plot HR Sizes
-# plt.figure(figsize = (12,8))
-# plt.plot(environment.pop_dynam.timestep,environment.pop_dynam.hr_deer)
-# plt.plot(environment.pop_dynam.timestep,environment.pop_dynam.hr_wolves)
-# plt.xlabel("Days")
-# plt.ylabel("HR Sizes")
-# plt.title("Home range sizes over time")
-# plt.legend(["Deer", "Wolves"])
-# plt.axvline(x = start_of_logging, color = 'black')
-# plt.axvline(x = stop_of_logging, color = 'black')
-# plt.axvline(x = stop_of_logging + end_of_seral_forest, color = 'black')
-
-
-
-# Sample individual tracking
-
-# for i in range(15):
-#     data = environment.wolf_tracking.loc[environment.wolf_tracking["wolfid"] == i]
-#     plt.plot(data.xpos,data.ypos)
-
-
-#-----------------------------------------------------------------------------
-
-# PREDATOR-PREY-BASE SENSITIVITY CHECK
-
-# n_simulations = 100
-# predation_efficiency_range = [0.14,0.15,0.16,0.17,0.18]
-
-# for i in range(1,n_simulations+1):
-    
-#     print(i," out of ", n_simulations, ' sets of simulations.')
-
-#     data = pd.DataFrame()
-    
-#     for value in predation_efficiency_range:
-#         predation_efficiency = value
-#         print('- Testing predation efficiency at ', value)
-#         start_time = time.time()
-#         environment = Environment(policy_in_effect = False)
-#         environment.simulation() 
-#         data['n_deer_'+str(value)] = environment.pop_dynam.n_deer
-#         data['n_wolves_'+str(value)] = environment.pop_dynam.n_wolves
-#         print('  ', time.time() - start_time, 'sec')
-    
-#     data['timestep'] = list(range(0,timesteps+1))
-#     data.to_csv('output/calibration/predator_prey_base/data/pop_dynam_'+str(i)+'.csv', index = False)
-#     print('---------------------------------------------------')
+plt.figure(figsize = (12,8))
+plt.plot(environment.pop_dynam.timestep,environment.pop_dynam.n_deer)
+plt.plot(environment.pop_dynam.timestep,environment.pop_dynam.n_wolves)
+plt.xlabel("Days")
+plt.ylabel("Population size")
+plt.title("Population dynamics")
+plt.legend(["Deer", "Wolves"])
+plt.axvline(x = start_of_logging, color = 'black')
+plt.axvline(x = stop_of_logging, color = 'black')
+plt.axvline(x = stop_of_logging + end_of_seral_forest, color = 'black')
     
 #------------------------------------------------------------------------------
 
@@ -743,38 +691,37 @@ class Environment:
 # OUTPUT - LOGGING PARAMETER TESTING
 
 # PARAMETER CHANGES
-no_cells_logged_per_month = 1 #vary between 0 and 13
+# no_cells_logged_per_month = 1 #vary between 0 and 13
 
-import multiprocess
+# import multiprocess
 
-version = str(1)
-n_simulations = 1002 # must be divisible by 3
+# version = str(1)
+# n_simulations = 1002 # must be divisible by 3
 
-set_of_ranges = [1] 
+# set_of_ranges = [1] 
 
-for i in range(1,multiprocess.cpu_count()-1):
-    set_of_ranges.append(i*(int(n_simulations/(multiprocess.cpu_count()-1))) + 1)
+# for i in range(1,multiprocess.cpu_count()-1):
+#     set_of_ranges.append(i*(int(n_simulations/(multiprocess.cpu_count()-1))) + 1)
     
-def simulations_logging_intensity(start):
+# def simulations_logging_intensity(start):
 
-    for i in range(start,start + int(n_simulations/(multiprocess.cpu_count()-1))):
+#     for i in range(start,start + int(n_simulations/(multiprocess.cpu_count()-1))):
   
-        environment = Environment(policy_in_effect = False)
-        environment.simulation()
-        environment.pop_dynam.to_csv('output/logging_intensity/v'+version+'/'+str(no_cells_logged_per_month)+'/pop_dynam_'+str(i)+'.csv', index = False)
+#        environment = Environment(policy_in_effect = False)
+#       environment.simulation()
+#        environment.pop_dynam.to_csv('output/logging_intensity/v'+version+'/'+str(no_cells_logged_per_month)+'/pop_dynam_'+str(i)+'.csv', index = False)
         
         # uncomment for the protection scenarios
         # environment = Environment(policy_in_effect = True)
         # environment.simulation()
         # environment.pop_dynam.to_csv('output/protection/v'+version+'/'+str(no_cells_logged_per_month) +'/pop_dynam_'+str(i)+'.csv', index = False)
-            
-        
+                    
 
-start_time = time.time() 
+# start_time = time.time() 
 
-if __name__ == '__main__':
-    with multiprocess.Pool() as p:
-        p.map(simulations_logging_intensity, set_of_ranges)
+# if __name__ == '__main__':
+#    with multiprocess.Pool() as p:
+#        p.map(simulations_logging_intensity, set_of_ranges)
 
-print('Program finished in ', time.time() - start_time, 'seconds.' )
+# print('Program finished in ', time.time() - start_time, 'seconds.' )
 
