@@ -152,5 +152,5 @@ st_write(control_part_two, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/s
 ```
 
 
-From here, these are individually ingested in the GEE JavaScript API, and exported as GEOJSONs using the script 'satellite-raw-export.js'.
+From here, these are individually ingested in the GEE JavaScript API, and exported as GEOJSONs using the script 'econ_3_satellite_raw_export.js'.
 
