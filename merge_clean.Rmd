@@ -1,0 +1,238 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This notebook serves simply to merge the many exports from the satellites into one shapefile. 
+
+What happened before this notebook:
+
+* I generated an image collection detailing yearly forest cover and forest cover loss for the entirety of BC in the Google Earth Engine JavaScript API. The code can be found here: https://code.earthengine.google.com/93f016fd737e545055f7178f0d5f9c43?noload=true 
+* I used that image collection and the shapefiles created in the Notebook shapefile_creation.RMD.nb and ran another piece of code in the GEE API to extract change data per Land Use Zone type as a GEOJSON file. This notebook here imports these GEOJSON files one by one. This code can be found here: https://code.earthengine.google.com/eb6e3737c360c0013053373f0c7d2821?noload=true .
+
+
+
+```{r}
+library(tidyverse)
+library(sf)
+options(scipen = 999)
+
+dataDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_output/v3/bc_hansen_processed_"
+
+bmtas <- st_read(paste0(dataDir,"bmta",".geojson"))
+conservancies <- st_read(paste0(dataDir,"conservancy",".geojson"))
+control_one <- st_read(paste0(dataDir,"control1",".geojson"))
+control_two <- st_read(paste0(dataDir,"control2",".geojson"))
+gbr_non <- st_read(paste0(dataDir,"gbr_non",".geojson"))
+parks <- st_read(paste0(dataDir,"parks",".geojson"))
+reserves <- st_read(paste0(dataDir,"ecolres",".geojson"))
+sfmas <- st_read(paste0(dataDir,"sfma",".geojson"))
+
+#bind them all together and transform the crs
+coast <- st_transform(dplyr::bind_rows(bmtas,conservancies,control_one,control_two,
+                                       gbr_non,parks,reserves,sfmas),
+                      3005)
+
+```
+
+Okay, so now we have a sf object that contains all of the coast. However, some of the geometries are a bit faulty, so we'll have to convert them. I will first split the data into (Multi-)polygons (the overwhelming part), and Geometry Collections (a lesser part), thereby eliminating points and linestrings. Then, I extract the polygon parts of the Geometry Collections, aggregate them into Multipolygons, and rejoin them with the other (Multi-)polygons.
+
+
+```{r}
+valid_part <- coast[st_is(coast,c("MULTIPOLYGON", "POLYGON")),]
+
+geometry_collections <- coast[st_is(coast,"GEOMETRYCOLLECTION"),]
+
+polygons_from_geometry_collections <- st_collection_extract(geometry_collections, "POLYGON")
+
+unique_ids <- polygons_from_geometry_collections %>% 
+  data.frame() %>% 
+  select(-geometry) %>% 
+  distinct()
+
+new_multipolygons <- polygons_from_geometry_collections %>% 
+  group_by(id) %>% 
+  summarise() %>% 
+  data.frame() %>% 
+  left_join(., unique_ids, by='id')%>% 
+  st_as_sf()
+
+coast_final <- bind_rows(valid_part,new_multipolygons)
+```
+
+
+Now, let's look at the data quickly:
+
+```{r}
+ggplot() +
+  geom_sf(data = coast_final, aes(fill = as.numeric(cover2021))) +
+  scale_fill_viridis_c(name = "Forest cover (ha) in 2021") +
+  labs(x = "Longitude", y = "Latitude")
+
+#ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/treecover2000.png", height = 8, width = 8)
+```
+
+That's it. That's the one. It's gorgeous. I'm going to make one more map to illustrate land use zones.
+
+
+```{r}
+ggplot() +
+  geom_sf(data = coast_final, aes(fill = Type), color = NA) +
+  scale_fill_viridis_d(name = "Land Use Zones", option = "viridis", direction = 1,
+                       labels = c("Biodiversity, Mining & Tourism Areas", "Conservancies", 
+                                  "Other Coastal BC", "Ecological Reserve", 
+                                  "Other Great Bear Rainforest", "Provincial Park",
+                                  "Special Forest Management Area")) +
+  labs(x = "Longitude", y= "Latitude")
+
+#ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/land_use_zones.png", height = 8, width = 8)
+```
+
+And one more to illustrate the data. What I'd like is weighted forest cover (per area). This also provides a really good sanity check on the quality of the data.
+
+```{r}
+coast_final %>% 
+  mutate(area_ha = as.numeric(st_area(.)/10000)) %>% 
+  mutate(weighted_forest_cover_2000 = as.numeric(cover2000*100/area_ha)) %>% 
+  filter(weighted_forest_cover_2000 <= 100) %>% 
+  ggplot() +
+    geom_sf(aes(fill = weighted_forest_cover_2000)) + 
+    scale_fill_viridis_c(name = "% Forest cover in 2000", option = "viridis", direction = -1) +
+    labs(x = "Longitude", y = "Latitude")
+
+ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/forest_cover.png", height = 8, width = 8)
+```
+
+
+
+Now, I just have to form an analysis ready data set. I exclude the IDs that showed faultiness, i.e. more forest cover than area.
+
+```{r}
+faulty_ids <- coast_final %>% 
+  mutate(area_ha = as.numeric(st_area(.)/10000)) %>% 
+  mutate(weighted_forest_cover_2010 = as.numeric(cover2010*100/area_ha)) %>% 
+  filter(weighted_forest_cover_2010 > 100) %>% 
+  pull(ID)
+
+almost_ard <- coast_final %>% 
+  dplyr::select(ID, Region, Zone, Type, geometry,starts_with("cover"),starts_with("loss")) %>% 
+  pivot_longer(!c(ID, Region, Zone, Type, geometry), names_to = c("variable", "year"), 
+               values_to = "value", names_pattern = "(\\w{4,})(\\d{4})") %>% 
+  mutate(value = as.numeric(value), year = as.numeric(year)) %>% 
+  # this makes sure that the cover in the previous year aligns with the loss in the current year
+  mutate(year = case_when(variable == "cover" ~ (year + 1),
+                          TRUE ~ as.numeric(year))) %>%
+  pivot_wider(names_from = "variable") %>% 
+  arrange(ID,year) %>%
+  relocate(year, cover, loss, Type, .after = ID) %>% 
+  rename(id = ID, prev_cover = cover, type = Type, region = Region, zone = Zone) %>% 
+  mutate(gbr = ifelse(type == "Control",0,1),.before = type) %>% 
+  filter(!id %in% faulty_ids) 
+```
+
+There is one last thing I want to add, which is cell-year specific winter temperatures. This determines how many pine beetles survive, and hopefully controls for their effect. The coldest months in coastal BC are December and January. The interesting variable is to have the coldness of the winter the year before, so a data point for 2019 would have to be December 2018/January 2019. It's very likely sensible that I try different variables. I webscraped monthly climate data from here: https://climate.weather.gc.ca/prods_servs/cdn_climate_summary_e.html, and I have the following variables at hand:
+
+* Mean Temperature (°C)
+* Mean Temperature difference from Normal (1981-2010) (°C)
+* Lowest Monthly Minimum Temperature (°C)
+
+Let's get those into shape:
+
+```{r message=FALSE, warning=FALSE}
+temp <- read_csv("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/climate/en_climate_summaries_BC_12-2000.csv") %>% 
+  select(Long,Lat,Clim_ID,Tm,D,Tn) %>% 
+  mutate(year = 2000) %>% 
+  mutate(month = 12)
+
+for(i in 2001:2021){
+  
+  for(j in c("01","12")){
+    
+    import <- read_csv(paste0("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/climate/en_climate_summaries_BC_",
+                              j,"-",i,".csv")) %>% 
+      select(Long,Lat,Clim_ID,Tm,D,Tn) %>% 
+      mutate(year = i) %>% 
+      mutate(month = j)
+    
+    temp <- rbind(temp,import)
+    
+  }
+}
+
+unique_clim_ids <- temp %>% 
+  select(Clim_ID, Long, Lat) %>% 
+  distinct() %>% 
+  summarize(longitude = mean(Long), latitude = mean(Lat), .by = Clim_ID)
+
+mintemp <- temp %>% 
+  left_join(unique_clim_ids, by = "Clim_ID") %>% 
+  select(-Long,-Lat) %>% 
+  rename(station = Clim_ID, meantemp = Tm, meandiff = D, mintemp = Tn) %>% 
+  mutate(year = case_when(month == "12" ~ year + 1, TRUE ~ year)) %>% 
+  summarize(mintemp = mean(mintemp, na.rm = T), 
+            #meandiff = mean(meandiff,na.rm = T), 
+            #meantemp = mean(meantemp, na.rm = T),
+            .by = c(station,year,longitude,latitude)) %>% 
+  pivot_wider(names_from = year, values_from = mintemp, names_prefix = "mintemp_") %>% 
+  filter_at(vars(starts_with("mintemp_")), any_vars(! is.na(.))) %>% 
+  st_as_sf(.,coords = c("longitude","latitude"))
+```
+
+Now, we're going to find the three nearest neighbors (three nearest weather stations) for each polygon, and average over those. That's gonna give us hopefully the least possible holes in the data with good spatial proximity.
+
+
+```{r}
+library(nngeo)
+
+main_wide <- almost_ard %>% 
+  rename(prevcover = prev_cover) %>% 
+  data.frame() %>% 
+  pivot_wider(names_from = year, values_from = c(prevcover,loss), names_sep = "_") %>% 
+  st_as_sf()
+
+mintemp <- st_set_crs(mintemp,4269)
+mintemp <- st_transform(mintemp, st_crs(main_wide))
+
+
+neighbors <- st_nn(main_wide,mintemp,k=3)
+
+append <- data.frame(matrix(ncol = 21))
+colnames(append) <- mintemp %>% data.frame() %>% select(2:22) %>% colnames()
+
+for(i in 1:length(neighbors)){
+  
+  append <- rbind(append, 
+                  data.frame(mintemp[neighbors[[i]],2:22]) %>% select(-geometry) %>% colMeans(na.rm = T))
+}
+
+
+append <- append[2:3973,]
+
+append %>% filter_at(vars(starts_with("mintemp_")), any_vars(! is.na(.)))
+  
+
+```
+
+Okay, we're good to go here (no cell has no weather data at all).
+
+
+```{r message=FALSE, warning=FALSE}
+ard <- append %>%  
+  cbind(main_wide,.) %>% 
+  data.frame() %>% 
+  pivot_longer(cols = starts_with(c("prevcover","loss","mintemp")), names_to = c("variable", "year"),
+               values_to = "value", names_sep = "_") %>% 
+  pivot_wider(names_from = "variable", values_from = "value") %>% 
+  filter(year != 2022) %>% 
+  relocate(year,prevcover,loss,mintemp,.before = gbr) %>% 
+  st_as_sf()
+
+```
+
+
+
+This data set is now ready to be processed. I haven't excluded cells with previous cover 0, so I have the potential to map all cells in the future. I have to do that before I run anything. Here is the export:
+
+```{r}
+st_write(ard,"C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/ard_luz_clim_full.shp")
+```
