@@ -1,7 +1,10 @@
 ---
-title: "R Notebook"
+title: "Shapefile Creation"
 output: html_notebook
 ---
+
+Last update: 19.08.2023
+Author: Peter Kamal (peter.kamal@t-online.de)
 
 This notebook exists to create the shapefile that contains the observational units for DiD estimation. I include maps to make clear what is happening. First, we have to import all the data. Data comes from:
 
