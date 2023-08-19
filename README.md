@@ -1,6 +1,9 @@
 # master-thesis
 This repository stores all the codes necessary to replicate the results from my master's thesis in the M2 Economics &amp; Ecology at Toulouse School of Economics.
 
+If you have any questions, address them to peter.kamal@t-online.de 
+
+
 There are two main parts: 
 1. The economic one, in which I perform a policy impact evaluation with satellite data.
 2. The ecological one, in which I construct an agent-based model of wolves and deer in a dynamic forest.
