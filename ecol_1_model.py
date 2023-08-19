@@ -6,6 +6,7 @@
 
 # Note: The model includes additional tracking options, which are commented out. 
 # They slow down the model but are helpful for checking the dynamics of individual animals if necessary.
+# Multi-processing-oriented code for big sets of simulations is commented out at the bottom.
 
 #------------------------------------------------------------------------------
 
