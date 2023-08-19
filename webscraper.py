@@ -1,4 +1,9 @@
-# Webscrape Weather Data from climate.weather.gc.ca
+# CLIMATE DATA WEBSCRAPING
+# Last update: 19.08.2023
+# Author: Peter Kamal (peter.kamal@t-online.de)
+
+# This is a very simple program to webscrape weather data from climate.weather.gc.ca
+# It downloads year-specific .csv files. I will extract the necessary information and match it with the satellite in the file 'merge_clean.Rmd'.
 
 # Setup
 from selenium import webdriver
