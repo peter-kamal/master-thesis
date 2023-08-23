@@ -136,10 +136,9 @@ def graph_predator_prey(n_simulations,version, post_eq_time):
     interim = pd.wide_to_long(data,['n_Deer','n_Wolves', 'hr_Deer', 'hr_Wolves'], sep = '_', i = 'timestep', j = 'sim').reset_index()
     final_data = pd.wide_to_long(interim, stubnames = ['n','hr'], i = ['timestep','sim'], j = 'Animal', sep = '_', suffix=r'\w+').reset_index()
 
-    extinction_rate = calculate_extinction_rate(data, 'Wolves', n_simulations)
-            
-    avg_hr_size_deer = calculate_mean_hr_size(data, 'Deer', post_eq_time)
-    avg_hr_size_wolf = calculate_mean_hr_size(data, 'Wolves', post_eq_time)
+    # extinction_rate = calculate_extinction_rate(data, 'Wolves', n_simulations)
+    # avg_hr_size_deer = calculate_mean_hr_size(data, 'Deer', post_eq_time)
+    # avg_hr_size_wolf = calculate_mean_hr_size(data, 'Wolves', post_eq_time)
 
     fig = sns.relplot(final_data, kind='line', x = 'timestep',y = 'n', errorbar='sd', hue='Animal', height = 5, aspect = 1.6)
     fig.set_axis_labels('Days', 'Population size')
