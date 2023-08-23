@@ -608,6 +608,7 @@ placebo_event_2006 %>%
 
 
 ```
+
 Parallel trends validated, but also no expectation of an effect in the DiD.
 
 #### BMTAs and SFMAs - Event Study in 2017:
@@ -660,10 +661,7 @@ placebo_event_2017 %>%
 
 Parallel trends confirmed, yet likely no effect in the DiD.
 
-
-
 #### Placebo - DiD 2006:
-
 
 ```{r message=FALSE, warning=FALSE}
 placebo_did_2006 <- data.frame(matrix(ncol = 1, nrow = ncol(placebo_samples)))
@@ -737,6 +735,7 @@ placebo_did_2006 %>%
     geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95)), linetype = "dashed") +
     ylab("Count")
 ```
+
 Nothing.
 
 #### BMTAs, SFMAs - DiD 2017
@@ -779,6 +778,8 @@ placebo_did_2017 %>%
     geom_vline(aes(xintercept = quantile(Estimate, probs = 0.95)), linetype = "dashed") +
     ylab("Count")
 ```
+
+
 Same result.
 
 SFMAs (this is Figure 8):
