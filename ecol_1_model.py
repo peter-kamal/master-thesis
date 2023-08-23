@@ -651,7 +651,7 @@ plt.axvline(x = stop_of_logging + end_of_seral_forest, color = 'black')
     
 #------------------------------------------------------------------------------
 
-# DEER ONLY (no wolves, but logging to show seasonality and carrying capacities)
+# MULTIPROCESSING OUTPUT - DEER ONLY
 
 # PARAMETER CHANGES
 
@@ -689,7 +689,7 @@ plt.axvline(x = stop_of_logging + end_of_seral_forest, color = 'black')
 
 #-----------------------------------------------------------------------------
 
-# OUTPUT - LOGGING PARAMETER TESTING
+# MULTI PROCESSING OUTPUT - LOGGING INTENSITY AND POLICIES
 
 # PARAMETER CHANGES
 # no_cells_logged_per_month = 1 #vary between 0 and 13
