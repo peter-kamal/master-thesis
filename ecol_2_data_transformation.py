@@ -90,4 +90,4 @@ def create_pop_dynam(scenario,n_simulations,version,parameter):
 #------------------------------------------------------------------------------
 
 # EXECUTE 
-create_pop_dynam(scenario = 'logging_intensity',n_simulations = 1000, version = 1, parameter = 1)
+# create_pop_dynam(scenario = 'logging_intensity',n_simulations = 1000, version = 1, parameter = 1)
