@@ -20,7 +20,7 @@ This part consists of six scripts of code:
 5. 'econ_5_dataset_creation': This is an R Notebook that merges all the exported satellite data together and matches it with the webscraped weather data. It exports an analysis-ready data set and creates two maps used in the paper.
 6. 'econ_6_analysis': This is an R Notebook that takes the analysis-ready dataset and produces the different graphs and analyses used and mentioned in the paper.
 
-While all the data (shapefiles, satellite data, etc.) is publicly available and referenced in the codes and paper, steps 1-5 have very long computation times. To make replication of the analysis easier, I provide the analysis-ready dataset on Figshare (accessible through the paper).
+While all the data (shapefiles, satellite data, etc.) is publicly available and referenced in the codes and paper, steps 1-5 have very long computation times. To make replication of the analysis easier, I provide the analysis-ready dataset on Google Drive (accessible through the paper).
 
 ## Ecological Part
 
@@ -29,4 +29,4 @@ This part consists of three scripts of code:
 2. 'ecol_2_data_transformation': The model outputs single .csv files for each simulation. This file merges all the files from one batch of simulations into a large, analysis-ready data set.
 3. 'ecol_3_data_analysis': This piece analyses the merged datasets and produces the different graphs for the paper.
 
-As this is simulation, replication is inherently easy. However, computation times are very long. Therefore, I provide the set of analysis-read data sets used for the figures on Figshare (accessible through the paper).
+As this is a simulation, replication is inherently easy (notwithstanding computation time). I did not have sufficient cloud storage to provide all the data that is used to produce the graphs. I can provide it if necessary.
