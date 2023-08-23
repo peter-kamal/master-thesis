@@ -10,7 +10,7 @@ This notebook serves to create an analysis-ready data set for the economic part 
 
 First, import the raw data.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(sf)
 options(scipen = 999)
@@ -36,7 +36,7 @@ coast <- st_transform(dplyr::bind_rows(bmtas,conservancies,control_one,control_t
 Okay, so now we have a sf object that contains all of the coast. However, some of the geometries are a bit faulty, so we'll have to convert them. I will first split the data into (Multi-)polygons (the overwhelming part), and Geometry Collections (a lesser part), thereby eliminating points and linestrings. Then, I extract the polygon parts of the Geometry Collections, aggregate them into Multipolygons, and rejoin them with the other (Multi-)polygons.
 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 valid_part <- coast[st_is(coast,c("MULTIPOLYGON", "POLYGON")),]
 
 geometry_collections <- coast[st_is(coast,"GEOMETRYCOLLECTION"),]
@@ -87,7 +87,7 @@ coast_final %>%
     scale_fill_viridis_c(name = "% Forest cover in 2000", option = "viridis", direction = -1) +
     labs(x = "Longitude", y = "Latitude")
 
-ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/forest_cover.png", height = 8, width = 8)
+#ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/forest_cover.png", height = 8, width = 8)
 ```
 
 The following chunks exclude faulty cells (where there is more forest cover than area) and then forms an almost-ready data set.
@@ -120,7 +120,7 @@ The next code chunk adds cell-year specific winter temperatures. It imports the 
 
 ```{r message=FALSE, warning=FALSE}
 temp <- read_csv("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/climate/en_climate_summaries_BC_12-2000.csv") %>% 
-  select(Long,Lat,Clim_ID,Tm,D,Tn) %>% 
+  select(Long,Lat,Clim_ID,Tn) %>% 
   mutate(year = 2000) %>% 
   mutate(month = 12)
 
@@ -158,7 +158,7 @@ mintemp <- temp %>%
 
 This code chunk finds the three nearest neighbors (three nearest weather stations) for each polygon, and averages over those.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(nngeo)
 
 main_wide <- almost_ard %>% 
