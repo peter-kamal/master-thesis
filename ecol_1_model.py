@@ -628,7 +628,7 @@ class Environment:
 
 #------------------------------------------------------------------------------
 
-# ONE SIMULATION (for a quick glance
+# ONE SIMULATION (for a quick glance)
 
 # Simulate
 
