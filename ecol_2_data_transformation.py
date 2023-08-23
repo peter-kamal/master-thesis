@@ -23,8 +23,12 @@ os.chdir('C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/ecol/model/output/')
 def create_pop_dynam(scenario,n_simulations,version,parameter):
     
     # This is a function that imports all the relevant population dynamics datasets, merges them, and exports them.
-    # Input one of four scenarios: logging_intensity, protection, deer_only, or predator_prey.
-    # Also input the number of simulations, the version and (for the logging intensity) the logging parameter.
+    # Input one of four scenarios: 
+    # 1. logging_intensity (i.e. unprotected forest at a specific logging intensity), 
+    # 2. protection_only (i.e. protected forest at a specific logging intensity), 
+    # 3. protection_full (both unprotected and protected forest at a specific logging intensity), 
+    # 4. deer_only (deer absent predatory pressure under unprotected logging)
+    # Also input the number of simulations, the version and the logging parameter.
     
     if scenario == 'logging_intensity':
     
