@@ -208,5 +208,5 @@ ard <- append %>%
 This data set is now ready to be processed.  Here is the export:
 
 ```{r}
-st_write(ard,"C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/ard_luz_clim_full.shp")
+#st_write(ard,"C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/ard_luz_clim_full.shp")
 ```
