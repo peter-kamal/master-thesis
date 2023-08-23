@@ -5,6 +5,7 @@
 # Last update: 21/07/23
 
 # Note: This takes the full data sets generated from 'ecol_2_data_transformation.py' and produces the graphs for the paper.
+# Graphs can be produced with titles and notes, this part is commented out.
 
 #------------------------------------------------------------------------------
 
@@ -229,7 +230,7 @@ def graph_logging_intensity(n_simulations, parameters_unprotected, parameters_pr
 
 def graph_protection(n_simulations, version, parameter, post_eq_time):
     
-    # Function graphs comparative population dynamics for unrprotected and protected scenarios.
+    # Function graphs comparative population dynamics for unprotected and protected scenarios.
     
     data = pd.read_csv('protection/v'+str(version)+'/pop_dynam_full_prot_'+str(parameter)+'_v'+str(version)+'.csv')
     
