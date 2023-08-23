@@ -17,13 +17,15 @@ This notebook exists to create the shapefile that contains the observational uni
 library(tidyverse)
 library(sf)
 
-grid <- st_read("20K_GRID_polygon_gcs.shp")
-districts <- st_read("ABMS_RD_polygon.shp")
-gbr <- st_read("FADM_SPA_polygon.shp") %>% filter(DSGNTD_AR == "Great Bear Rainforest")
-parks <- st_read("ParksER_GBR-polygon.shp")
-conservancies <- st_read("Cons_GBR_HG-polygon.shp")
-bmtas <- st_read("BMTA_GBR-polygon.shp")
-sfmas <- st_read("SFMA_GBR-polygon.shp")
+dataDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/shapefiles/"
+
+grid <- st_read(paste0(dataDir,"20K_GRID_polygon_gcs.shp"))
+districts <- st_read(paste0(dataDir,"ABMS_RD_polygon.shp"))
+gbr <- st_read(paste0(dataDir,"FADM_SPA_polygon.shp")) %>% filter(DSGNTD_AR == "Great Bear Rainforest")
+parks <- st_read(paste0(dataDir,"ParksER_GBR-polygon.shp"))
+conservancies <- st_read(paste0(dataDir,"Cons_GBR_HG-polygon.shp"))
+bmtas <- st_read(paste0(dataDir,"BMTA_GBR-polygon.shp"))
+sfmas <- st_read(paste0(dataDir,"SFMA_GBR-polygon.shp"))
 
 #vector of all coastal districts
 coast_districts <- c("RDAC","CAPRD","CCRD","CMXRD","CVRD","FVRD","RDKS","MVRD",
@@ -31,7 +33,7 @@ coast_districts <- c("RDAC","CAPRD","CCRD","CMXRD","CVRD","FVRD","RDKS","MVRD",
 ```
 
 
-In a first step, we will cut down the districts and the grid to just the coast to make computation easier.
+This cuts down the districts and the grid to coastal BC:
 
 ```{r message=FALSE, warning=FALSE}
 districts <- districts %>% filter(ABRVN %in% coast_districts)
@@ -49,7 +51,7 @@ ggplot() +
 
 ```
 
-Next, we will construct a single shapefile that contains all sorts of protected areas within the GBR, and classify non-protected areas as well. To do so, we have to unify the shape of the data first.
+This constructs a single shapefile that contains all sorts of protected areas within the GBR, and classifies non-protected areas as well. In doing so, it unifies the shape of the data first.
 
 ```{r message=FALSE, warning=FALSE}
 bmtas <- bmtas %>% 
@@ -96,7 +98,8 @@ ggplot() +
   scale_fill_viridis_d(option = "cividis")
 ```
 
-Now, we have to match that to the coastal grid.
+
+This matches the land use zones to the grid.
 
 
 ```{r message=FALSE, warning=FALSE}
@@ -116,7 +119,7 @@ ggplot()+
 ```
 
 
-Lastly, clean the data up and save it, disaggregated by land use zone. This is necessary due to memory restrictions in the GEE API.
+This cleans the data up and saves it disaggregated by land use zone. This is necessary due to memory restrictions in the GEE API.
 
 ```{r}
 coast_full <- coast_full %>% 
@@ -129,28 +132,25 @@ coast_full <- coast_full %>%
                           TRUE ~ Type)) 
 
 
-# This would be the full shapefile set
-#st_write(coast_full, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/coast_land_use_zones.shp")
+outDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/"
 
 for(i in unique(coast_full$Type)){
   data <- coast_full %>%  filter(Type == i)
-  st_write(data, paste0("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/",i, ".shp"))
+  st_write(data, paste0(outDir,i, ".shp"))
 }
 
-
 # Split the Control part in two to not exceed the memory:
-
 control_part_one <- coast_full %>% 
   filter(Type == "Control") %>% 
   slice(1:974)
 
-st_write(control_part_one, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/control_part_one.shp")
+st_write(control_part_one, paste0(outDir,"control_part_one.shp"))
 
 control_part_two <- coast_full %>% 
   filter(Type == "Control") %>% 
   slice(975:1874)
 
-st_write(control_part_two, "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/satellite_input/v2/control_part_two.shp")
+st_write(control_part_two, paste0(outDir,"control_part_two.shp"))
 
 ```
 
