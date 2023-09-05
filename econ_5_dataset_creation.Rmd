@@ -6,7 +6,7 @@ output: html_notebook
 Last update: 19.08.2023
 Author: Peter Kamal (peter.kamal@t-online.de)
 
-This notebook serves to create an analysis-ready data set for the economic part of the thesis. It imports the raw satellite data exported in 'econ_3_satellite_raw_export.js' and the weather data webscraped with 'econ_4_webscraper.py', merges, cleans and exports it. The final data set is available on figshare (accessible through the paper).
+This notebook serves to create an analysis-ready data set for the economic part of the thesis. It imports the raw satellite data exported in 'econ_3_satellite_raw_export.js' and the weather data webscraped with 'econ_4_webscraper.py', merges, cleans and exports it. The final data set is available on Google Drive (accessible through the paper).
 
 First, import the raw data.
 
@@ -33,7 +33,7 @@ coast <- st_transform(dplyr::bind_rows(bmtas,conservancies,control_one,control_t
 
 ```
 
-Okay, so now we have a sf object that contains all of the coast. However, some of the geometries are a bit faulty, so we'll have to convert them. I will first split the data into (Multi-)polygons (the overwhelming part), and Geometry Collections (a lesser part), thereby eliminating points and linestrings. Then, I extract the polygon parts of the Geometry Collections, aggregate them into Multipolygons, and rejoin them with the other (Multi-)polygons.
+This is an sf object that contains all of the coast. However, some of the geometries are a faulty, so conversion is necessary. I will first split the data into (Multi-)polygons (the overwhelming part), and Geometry Collections (a lesser part), thereby eliminating points and linestrings. Then, I extract the polygon parts of the Geometry Collections, aggregate them into Multipolygons, and rejoin them with the other (Multi-)polygons.
 
 
 ```{r message=FALSE, warning=FALSE}
