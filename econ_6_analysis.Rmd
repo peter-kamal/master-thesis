@@ -3,12 +3,12 @@ title: "Main Analysis"
 output: html_notebook
 ---
 
-Last update: 19.08.2023
+Last update: 05.09.2023
 Author: Peter Kamal (peter.kamal@t-online.de)
 
 This notebook is the main analysis code for the economic part of the thesis. It takes the analysis-ready data generated in the file "econ_5_dataset_creation.Rmd" and runs Difference-in-Differences and Event Study estimators on it.
 
-## Setup
+# Setup
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 set.seed(42)
@@ -30,7 +30,7 @@ data <- st_read(paste0(dataDir,"ard_luz_clim_full.shp"))
 IHS <- function(x){log(x+(x^2+1)^(1/2))}
 ```
 
-## Initial Data Wrangling
+# Initial Data Wrangling
 
 This creates an first version of the final data set:
 
@@ -52,9 +52,9 @@ estim_data_full <- data %>%
 ```
 
 
-## Descriptive Stats
+# Descriptive Stats
 
-Here is a table that gives some insights into the estimation data.
+This is a raw version of Table 1 in the Appendix. 
 
 ```{r eval=FALSE, include=FALSE}
 
@@ -112,9 +112,10 @@ xtable(stats)
 
 ```
 
-## Aggregated Time Series/Parallel Trends
 
-What I want to show here is the yearly time series of forest loss (as a percentage of forest cover) aggregated on a land-use-type level. This produces Figure 3 in the paper.
+# Aggregated Time Series/Parallel Trends
+
+This yearly time series of forest loss (as a percentage of forest cover) aggregated on a land-use-type level. This produces Figure 3 in the paper.
 
 
 ```{r}
@@ -144,6 +145,7 @@ estim_data_full %>%
 #ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/parallel_trends_full.png", width = 8, height = 4)
 ```
 
+
 The next chunks explore the visible spikes in the Provincial Parks. This first shows that the spikes come from Tweedsmuir Park in particular:
 
 ```{r}
@@ -152,6 +154,7 @@ estim_data_full %>%
   filter(year %in% c(2004,2009,2019)) %>% 
   arrange(desc(loss))
 ```
+
 
 Here, we plot the winter temperature by land use zone to see whether the spikes correlate with the previous graph. This is Figure 4 in the paper.
 
@@ -169,16 +172,15 @@ estim_data_full %>%
 ```
 
 
-
-## Estimation
+# Estimation
 
 This section details different estimations. Many of them are not included in the paper, but I keep them in for transparency. 
 
-### Global estimations
+## Global estimations
 
 First, I'll designate the entirety of the GBR as treatment, and the rest of the coast as control. I'll run an event study with the cutoff in 2006, and one with the cutoff in 2017 to check for parallel trends. In the 2006 version, the data runs until 2016 (before the GBRFMA), in the 2017 version, the data starts in 2010 (after the last big amendment to the agreements. In doing so, I'm creating data sets with leads and lags centered around the cutoffs that I can reuse down below.
 
-#### Event Study for 2006:
+### Event Study for 2006 (not included):
 
 ```{r}
 estim_data_all_2006 <- estim_data_full %>% 
@@ -241,7 +243,7 @@ data.frame(cbind(years_2006,
 
 This renders a global DiD analysis with the cutoff in 2006 invalid, as parallel trends are violated. 
 
-#### Event study for 2017 (this produces Figure 5):
+### Event study/DiD for 2017 (this produces Figure 5):
 
 ```{r}
 estim_data_all_2017 <- estim_data_full %>% 
@@ -296,7 +298,9 @@ data.frame(cbind(years_2017,
 #ggsave("graphics/event_2017_all.png", height = 4, width = 8)
 ```
 
+
 This validates parallel trends, but also makes an effect in the DiD seem unlikely. Here is the DiD (results are mentioned in the text):
+
 
 ```{r message=FALSE, warning=FALSE}
 did_all_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region, 
@@ -309,9 +313,9 @@ summary(did_all_2017)
 ```
 
 
-### Decomposition into different areas
+## Decomposition into different areas
 
-#### Undesignated areas - Event Study 2006:
+### Undesignated areas - Event Study 2006 (not included):
 
 ```{r message=FALSE, warning=FALSE}
 estim_data_non_2006 <- estim_data_all_2006 %>% filter(type %in% c("Control", "GBR - Not designated"))
@@ -343,9 +347,7 @@ data.frame(cbind(years_2006,
 
 Again, no parallel trends.
 
-#### Undesignated areas - Event Study and DiD 2017 
-
-This produces Figure 6:
+### Undesignated areas - Event Study/DiD 2017 (Figure 6)
 
 ```{r}
 estim_data_non_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "GBR - Not designated"))
@@ -378,6 +380,7 @@ data.frame(cbind(years_2017,
 #ggsave("graphics/event_2017_non.png", height = 4, width = 8)
 ```
 
+
 Parallel trends are valid, but an effect in the DiD unlikely. Here is the DiD (results mentioned in the paper):
 
 
@@ -391,7 +394,7 @@ did_non_2017 <- feols(IHS(loss) ~ gbr*post_2017 + mintemp | id + year + region,
 summary(did_non_2017)
 ```
 
-#### Conservancies - Event Study 2006:
+### Conservancies - Event Study 2006 (not included):
 
 ```{r message=FALSE, warning=FALSE}
 estim_data_cons_2006 <- estim_data_all_2006 %>% filter(type %in% c("Control", "Conservancy"))
@@ -423,7 +426,7 @@ data.frame(cbind(years_2006,
 
 No parallel trends.
 
-#### Conservancies - Event Study & DiD 2017:
+### Conservancies - Event Study/DiD 2017 (not included):
 
 
 ```{r}
@@ -467,7 +470,7 @@ summary(did_cons_2017)
 ```
 
 
-### BMTAs/SFMAs with Fisher permutation test
+## BMTAs/SFMAs with Fisher permutation test
 
 This constructs the placebo samples:
 
@@ -497,7 +500,7 @@ placebo_samples <- cbind(placebo_samples, append(placebo_ids, rep(NA,sample_size
 
 ```
 
-#### Placebos - Event study for 2006:
+### Placebos - Event study for 2006:
 
 ```{r message=FALSE, warning=FALSE}
 placebo_event_2006 <- data.frame(matrix(ncol = length(years_2006), nrow = ncol(placebo_samples)))
@@ -533,7 +536,7 @@ for(i in 1:ncol(placebo_samples)){
 
 ```
 
-#### Placebos - Event Study for 2017:
+### Placebos - Event Study for 2017:
 
 ```{r message=FALSE, warning=FALSE}
 placebo_event_2017 <- data.frame(matrix(ncol = length(years_2017), nrow = ncol(placebo_samples)))
@@ -567,7 +570,7 @@ for(i in 1:ncol(placebo_samples)){
 
 ```
 
-#### BMTAs - Event Study 2006:
+### BMTAs - Event Study 2006 (not included):
 
 ```{r}
 bmta_event_2006 <- data.frame(years_2006)
@@ -588,7 +591,6 @@ bmta_event_2006 <- bmta_event_2006 %>%
   
 
 ```
-
 
 This is the hypothesis test:
 
@@ -611,7 +613,7 @@ placebo_event_2006 %>%
 
 Parallel trends validated, but also no expectation of an effect in the DiD.
 
-#### BMTAs and SFMAs - Event Study in 2017:
+### BMTAs and SFMAs - Event Study in 2017 (Figure 7):
 
 ```{r message=FALSE, warning=FALSE}
 zones <- c("BMTA", "SFMA")
@@ -638,6 +640,7 @@ for(i in zones){
 
 ```
 
+
 And here is the result for SFMAs (this is Figure 7 in the paper, I don't include BMTAs as there was no effect):
 
 ```{r}
@@ -661,7 +664,7 @@ placebo_event_2017 %>%
 
 Parallel trends confirmed, yet likely no effect in the DiD.
 
-#### Placebo - DiD 2006:
+### Placebo - DiD 2006:
 
 ```{r message=FALSE, warning=FALSE}
 placebo_did_2006 <- data.frame(matrix(ncol = 1, nrow = ncol(placebo_samples)))
@@ -686,7 +689,7 @@ for(i in 1:ncol(placebo_samples)){
 ```
 
 
-#### Placebo -  DiD 2017
+### Placebo -  DiD 2017
 
 
 ```{r message=FALSE, warning=FALSE}
@@ -711,7 +714,7 @@ for(i in 1:ncol(placebo_samples)){
 
 ```
 
-#### BMTAs - DiD 2006:
+### BMTAs - DiD 2006 (not included):
 
 ```{r}
 did_bmta_2006 <- feols(IHS(loss) ~ gbr*post_2006 + mintemp | id + year + region, 
@@ -724,7 +727,7 @@ bmta_coef_2006 <- summary(did_bmta_2006)$coefficients["gbr:post_2006"]
 summary(did_bmta_2006)
 ```
 
-Not even significant with clustering. Let's look at the result of the test:
+Not even significant with clustering. Let's look at the result of the test (not included):
 
 ```{r}
 placebo_did_2006 %>% 
@@ -736,9 +739,9 @@ placebo_did_2006 %>%
     ylab("Count")
 ```
 
-Nothing.
+No effect.
 
-#### BMTAs, SFMAs - DiD 2017
+### BMTAs, SFMAs - DiD 2017 (Figure 8)
 
 ```{r message=FALSE, warning=FALSE}
 estim_data_bmta_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "BMTA"))
