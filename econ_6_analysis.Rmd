@@ -4,9 +4,10 @@ output: html_notebook
 ---
 
 Last update: 05.09.2023
+
 Author: Peter Kamal (peter.kamal@t-online.de)
 
-This notebook is the main analysis code for the economic part of the thesis. It takes the analysis-ready data generated in the file "econ_5_dataset_creation.Rmd" and runs Difference-in-Differences and Event Study estimators on it.
+This notebook is the main analysis code for the economic part of the thesis. It takes the analysis-ready data generated in the file "econ_5_dataset_creation.Rmd" and runs Difference-in-Differences and Event Study estimators on it. This analysis includes some that are not in the paper. These are marked as such, and the graphs are preliminary.
 
 # Setup
 
@@ -21,6 +22,7 @@ library(fixest)
 library(lubridate)
 library(sf)
 library(spdep)
+library(scales)
 
 dataDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/data/"
 graphDir <- "C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/"
@@ -142,7 +144,7 @@ estim_data_full %>%
     scale_color_manual(name = "", values = c("orange", "dodgerblue3")) +
     theme_bw()
 
-#ggsave("C:/Users/Kamal/OneDrive/TSE/M2 EE/thesis/econ/graphics/parallel_trends_full.png", width = 8, height = 4)
+ggsave(paste0(graphDir,"parallel_trends_full.png"), width = 8, height = 4)
 ```
 
 
@@ -168,7 +170,7 @@ estim_data_full %>%
     labs(x = "Year", y= "Minimum temperature (°C) in preceding winter") +
     theme_bw()
 
-#ggsave("graphics/temp_check.png", width = 8, height = 4)
+ggsave(paste0(graphDir,"temp_check.png"), width = 8, height = 4)
 ```
 
 
@@ -291,11 +293,12 @@ data.frame(cbind(years_2017,
     geom_point(color = "orange2") +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "orange2") +
     geom_hline(aes(yintercept = 0)) +
-    geom_vline(aes(xintercept = as.Date("2016-11-01", format = "%Y-%m-%d")), linetype = "dashed") +
+    scale_x_date(date_breaks = "years", date_labels = '%Y') +
+    geom_vline(aes(xintercept = as.Date("2016-07-01", format = "%Y-%m-%d")), linetype = "dashed") +
     theme_bw()
 
 
-#ggsave("graphics/event_2017_all.png", height = 4, width = 8)
+ggsave(paste0(graphDir,"event_2017_all.png"), height = 4, width = 8)
 ```
 
 
@@ -373,11 +376,12 @@ data.frame(cbind(years_2017,
     geom_point(color = "orange2") +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, color = "orange2") +
     geom_hline(aes(yintercept = 0)) +
-    geom_vline(aes(xintercept = as.Date("2016-11-01", format = "%Y-%m-%d")), linetype = "dashed") +
+    scale_x_date(date_breaks = "years", date_labels = '%Y') +
+    geom_vline(aes(xintercept = as.Date("2016-07-01", format = "%Y-%m-%d")), linetype = "dashed") +
     theme_bw()
 
 
-#ggsave("graphics/event_2017_non.png", height = 4, width = 8)
+ggsave(paste0(graphDir,"event_2017_non.png"), height = 4, width = 8)
 ```
 
 
@@ -659,7 +663,7 @@ placebo_event_2017 %>%
     ylab("Count") +
     theme_bw()
 
-#ggsave("graphics/event_2017_sfma.png", height = 5, width = 8)
+ggsave(paste0(graphDir,"event_2017_sfma.png"), height = 5, width = 8)
 ```
 
 Parallel trends confirmed, yet likely no effect in the DiD.
@@ -797,7 +801,7 @@ placebo_did_2017 %>%
     ylab("Count") +
     theme_bw()
 
-# ggsave("graphics/did_2017_sfma.png", height = 3, width = 5)
+ggsave(paste0(graphDir,"did_2017_sfma.png"), height = 3, width = 5)
 ```
 
 No effect. The reduction that is highly significant when clustering is not significantly different from the control units.
