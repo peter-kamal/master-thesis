@@ -11,7 +11,7 @@ This notebook is the main analysis code for the economic part of the thesis. It 
 
 # Setup
 
-```{r message=FALSE, warning=FALSE, include=FALSE}
+```{r message=FALSE, warning=FALSE}
 set.seed(42)
 
 options(scipen=999)
@@ -58,7 +58,7 @@ estim_data_full <- data %>%
 
 This is a raw version of Table 1 in the Appendix. 
 
-```{r eval=FALSE, include=FALSE}
+```{r message=FALSE, warning=FALSE}
 
 stats <- rbind(
   
@@ -184,7 +184,7 @@ First, I'll designate the entirety of the GBR as treatment, and the rest of the 
 
 ### Event Study for 2006 (not included):
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 estim_data_all_2006 <- estim_data_full %>% 
   filter(!type %in% c("Ecological Reserve", "Provincial Park")) %>% 
   mutate(year = as.numeric(year)) %>% 
@@ -247,7 +247,7 @@ This renders a global DiD analysis with the cutoff in 2006 invalid, as parallel 
 
 ### Event study/DiD for 2017 (this produces Figure 5):
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 estim_data_all_2017 <- estim_data_full %>% 
   filter(!type %in% c("Ecological Reserve", "Provincial Park")) %>% 
   mutate(year = as.numeric(year)) %>% 
@@ -352,7 +352,7 @@ Again, no parallel trends.
 
 ### Undesignated areas - Event Study/DiD 2017 (Figure 6)
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 estim_data_non_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "GBR - Not designated"))
 
 
@@ -433,7 +433,7 @@ No parallel trends.
 ### Conservancies - Event Study/DiD 2017 (not included):
 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 estim_data_cons_2017 <- estim_data_all_2017 %>% filter(type %in% c("Control", "Conservancy"))
 
 
@@ -537,8 +537,9 @@ for(i in 1:ncol(placebo_samples)){
   
 }
 
-
 ```
+
+
 
 ### Placebos - Event Study for 2017:
 
@@ -571,12 +572,12 @@ for(i in 1:ncol(placebo_samples)){
   
 }
 
-
 ```
+
 
 ### BMTAs - Event Study 2006 (not included):
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 bmta_event_2006 <- data.frame(years_2006)
 colnames(bmta_event_2006) <- "Year"
 
@@ -611,7 +612,6 @@ placebo_event_2006 %>%
     geom_vline(aes(xintercept = Estimate_BMTA), linetype = "dashed") +
     facet_wrap(~Year, ncol = 4) +
     ylab("Count")
-
 
 ```
 
@@ -720,7 +720,7 @@ for(i in 1:ncol(placebo_samples)){
 
 ### BMTAs - DiD 2006 (not included):
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 did_bmta_2006 <- feols(IHS(loss) ~ gbr*post_2006 + mintemp | id + year + region, 
                               data = estim_data_bmta_2006, panel.id = ~id+year,
                               weights = ~prevcover, cluster = "region")
